@@ -1,13 +1,13 @@
 package com.example.blessed3
 
-import com.welie.blessed.BluetoothBytesParser
 import com.example.blessed3.ObservationUnit.Kilograms
 import com.example.blessed3.ObservationUnit.Pounds
+import com.welie.blessed.BluetoothBytesParser
 import java.nio.ByteOrder
 import java.text.DateFormat
 import java.text.SimpleDateFormat
-import java.util.Date
 import java.util.Calendar
+import java.util.Date
 import java.util.Locale
 import kotlin.math.round
 
@@ -52,7 +52,7 @@ data class WeightMeasurement(
                     bmi = bmi,
                     heightInMetersOrInches = height
                 )
-            } catch (ex: Exception) {
+            } catch (_: Exception) {
                 return null
             }
         }

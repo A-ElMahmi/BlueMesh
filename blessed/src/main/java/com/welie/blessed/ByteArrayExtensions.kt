@@ -4,7 +4,10 @@ package com.welie.blessed
 import java.nio.ByteOrder
 import java.nio.ByteOrder.LITTLE_ENDIAN
 import java.nio.charset.StandardCharsets
-import java.util.*
+import java.util.Calendar
+import java.util.Date
+import java.util.GregorianCalendar
+import java.util.UUID
 import kotlin.math.pow
 
 fun Byte.asHexString(): String {

@@ -1,13 +1,13 @@
 package com.example.blessed3
 
-import com.welie.blessed.BluetoothBytesParser
-import java.nio.ByteOrder.LITTLE_ENDIAN
-import java.util.Date
-import java.util.Calendar
 import com.example.blessed3.ObservationUnit.MiligramPerDeciliter
 import com.example.blessed3.ObservationUnit.MmolPerLiter
+import com.welie.blessed.BluetoothBytesParser
+import java.nio.ByteOrder.LITTLE_ENDIAN
 import java.text.DateFormat
 import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
 import java.util.Locale
 
 data class GlucoseMeasurement(
@@ -51,7 +51,7 @@ data class GlucoseMeasurement(
                     value = glucoseValue,
                     contextWillFollow = contextWillFollow
                 )
-            } catch (ex: Exception) {
+            } catch (_: Exception) {
                 return null
             }
         }

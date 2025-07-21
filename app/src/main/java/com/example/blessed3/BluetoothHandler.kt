@@ -7,12 +7,25 @@ import android.bluetooth.le.ScanResult
 import android.content.Context
 import android.os.Handler
 import android.os.HandlerThread
-import android.os.Looper
 import android.os.Process
 import android.widget.Toast
 import android.widget.Toast.LENGTH_SHORT
-import com.welie.blessed.*
+import com.welie.blessed.BluetoothBytesBuilder
+import com.welie.blessed.BluetoothBytesParser
+import com.welie.blessed.BluetoothCentralManager
+import com.welie.blessed.BluetoothCentralManagerCallback
+import com.welie.blessed.BluetoothPeripheral
+import com.welie.blessed.BluetoothPeripheralCallback
+import com.welie.blessed.BondState
+import com.welie.blessed.ConnectionPriority
+import com.welie.blessed.GattStatus
+import com.welie.blessed.HciStatus
 import com.welie.blessed.WriteType.WITH_RESPONSE
+import com.welie.blessed.currentTimeByteArrayOf
+import com.welie.blessed.from16BitString
+import com.welie.blessed.getString
+import com.welie.blessed.getUInt8
+import com.welie.blessed.supportsWritingWithResponse
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -23,7 +36,10 @@ import timber.log.Timber
 import java.nio.ByteOrder
 import java.text.DateFormat
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Calendar
+import java.util.Locale
+import java.util.TimeZone
+import java.util.UUID
 
 
 @SuppressLint("StaticFieldLeak")

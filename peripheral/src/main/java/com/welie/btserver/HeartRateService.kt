@@ -7,8 +7,6 @@ import android.os.Handler
 import android.os.Looper
 import com.welie.blessed.BluetoothCentral
 import com.welie.blessed.BluetoothPeripheralManager
-import com.welie.blessed.GattStatus
-import com.welie.blessed.ReadResponse
 import timber.log.Timber
 import java.util.UUID
 

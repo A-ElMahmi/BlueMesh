@@ -5,7 +5,7 @@ enum class TemperatureType(val value: UInt) {
 
     companion object {
         fun fromValue(value: UInt): TemperatureType {
-            for (type in values()) {
+            for (type in entries) {
                 if (type.value == value) return type
             }
             return Unknown

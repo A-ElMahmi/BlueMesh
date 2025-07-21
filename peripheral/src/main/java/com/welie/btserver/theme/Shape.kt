@@ -1,4 +1,4 @@
-package com.example.blessed3.ui.theme
+package com.welie.btserver.theme
 
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Shapes

@@ -1,4 +1,4 @@
-package com.example.blessed3.ui.theme
+package com.welie.btserver.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme

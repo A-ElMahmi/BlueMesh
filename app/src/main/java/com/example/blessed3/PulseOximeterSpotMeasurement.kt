@@ -4,8 +4,8 @@ import com.welie.blessed.BluetoothBytesParser
 import java.nio.ByteOrder.LITTLE_ENDIAN
 import java.text.DateFormat
 import java.text.SimpleDateFormat
-import java.util.Date
 import java.util.Calendar
+import java.util.Date
 import java.util.Locale
 
 data class PulseOximeterSpotMeasurement(
@@ -52,7 +52,7 @@ data class PulseOximeterSpotMeasurement(
                     timestamp = timestamp,
                     isDeviceClockSet = isDeviceClockSet
                 )
-            } catch (ex : Exception) {
+            } catch (_ : Exception) {
                 return null
             }
         }

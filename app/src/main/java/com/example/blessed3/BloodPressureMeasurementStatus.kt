@@ -1,32 +1,30 @@
 package com.example.blessed3
 
-class BloodPressureMeasurementStatus internal constructor(measurementStatus: UShort) {
+@ConsistentCopyVisibility
+@Suppress("unused")
+data class BloodPressureMeasurementStatus internal constructor(val measurementStatus: UShort) {
     /**
      * Body Movement Detected
      */
-    val isBodyMovementDetected: Boolean
+    val isBodyMovementDetected: Boolean = measurementStatus and 0x0001u > 0u
+
     /**
      * Cuff is too loose
      */
-    val isCuffTooLoose: Boolean
+    val isCuffTooLoose: Boolean = measurementStatus and 0x0002u > 0u
+
     /**
      * Irregular pulse detected
      */
-    val isIrregularPulseDetected: Boolean
+    val isIrregularPulseDetected: Boolean = measurementStatus and 0x0004u > 0u
+
     /**
      * Pulse is not in normal range
      */
-    val isPulseNotInRange: Boolean
+    val isPulseNotInRange: Boolean = measurementStatus and 0x0008u > 0u
+
     /**
      * Improper measurement position
      */
-    val isImproperMeasurementPosition: Boolean
-
-    init {
-        isBodyMovementDetected = measurementStatus and 0x0001u > 0u
-        isCuffTooLoose = measurementStatus and 0x0002u > 0u
-        isIrregularPulseDetected = measurementStatus and 0x0004u > 0u
-        isPulseNotInRange = measurementStatus and 0x0008u > 0u
-        isImproperMeasurementPosition = measurementStatus and 0x0020u > 0u
-    }
+    val isImproperMeasurementPosition: Boolean = measurementStatus and 0x0020u > 0u
 }

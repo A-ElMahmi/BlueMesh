@@ -23,7 +23,14 @@
 package com.welie.blessed
 
 import android.annotation.SuppressLint
-import android.bluetooth.*
+import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothGatt
+import android.bluetooth.BluetoothGattCallback
+import android.bluetooth.BluetoothGattCharacteristic
+import android.bluetooth.BluetoothGattDescriptor
+import android.bluetooth.BluetoothGattService
+import android.bluetooth.BluetoothProfile
+import android.bluetooth.BluetoothStatusCodes
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -33,7 +40,11 @@ import android.os.Handler
 import android.os.Looper
 import android.os.Parcel
 import android.os.SystemClock
-import java.util.*
+import java.util.Arrays
+import java.util.Collections
+import java.util.Locale
+import java.util.Queue
+import java.util.UUID
 import java.util.concurrent.ConcurrentLinkedQueue
 import kotlin.math.min
 

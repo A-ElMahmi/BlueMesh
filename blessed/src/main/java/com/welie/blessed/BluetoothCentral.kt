@@ -24,7 +24,7 @@ package com.welie.blessed
 
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothDevice
-import java.util.*
+import java.util.Objects
 
 /**
  * This class represent a remote Central

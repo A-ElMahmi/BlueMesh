@@ -4,8 +4,8 @@ import com.welie.blessed.BluetoothBytesParser
 import java.nio.ByteOrder
 import java.text.DateFormat
 import java.text.SimpleDateFormat
-import java.util.Date
 import java.util.Calendar
+import java.util.Date
 import java.util.Locale
 
 data class TemperatureMeasurement(
@@ -40,7 +40,7 @@ data class TemperatureMeasurement(
                     timestamp = timestamp,
                     type = type
                 )
-            } catch (ex: Exception) {
+            } catch (_: Exception) {
                 return null
             }
         }

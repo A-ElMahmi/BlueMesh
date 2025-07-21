@@ -2,11 +2,8 @@ package com.example.blessed3
 
 import com.welie.blessed.BluetoothBytesParser
 import java.nio.ByteOrder
-import java.text.DateFormat
-import java.text.SimpleDateFormat
-import java.util.Date
 import java.util.Calendar
-import java.util.Locale
+import java.util.Date
 
 data class HeartRateMeasurement(
     val pulse: UShort,
@@ -53,7 +50,7 @@ data class HeartRateMeasurement(
                     sensorContactStatus = sensorContactStatus,
                     rrIntervals = rrArray.toIntArray()
                 )
-            } catch (ex: Exception) {
+            } catch (_: Exception) {
                 return null
             }
         }
