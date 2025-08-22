@@ -1,5 +1,5 @@
 /*
- *   Copyright (c) 2023 Martijn van Welie
+ *   Copyright (c) 2025 Martijn van Welie
  *
  *   Permission is hereby granted, free of charge, to any person obtaining a copy
  *   of this software and associated documentation files (the "Software"), to deal
@@ -48,7 +48,6 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import com.welie.blessed.AdvertiseError.Companion.fromValue
-import java.util.Arrays
 import java.util.Collections
 import java.util.Objects
 import java.util.Queue
@@ -284,10 +283,10 @@ class BluetoothPeripheralManager(private val context: Context, private val bluet
                     bluetoothGattServer.sendResponse(device, requestId, status.value, offset, safeValue)
                 }
                 if (status == GattStatus.SUCCESS && descriptor.uuid == CCC_DESCRIPTOR_UUID) {
-                    if (Arrays.equals(safeValue, BluetoothGattDescriptor.ENABLE_INDICATION_VALUE)
-                        || Arrays.equals(safeValue, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
+                    if (safeValue.contentEquals(BluetoothGattDescriptor.ENABLE_INDICATION_VALUE)
+                        || safeValue.contentEquals(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
                     ) {
-                        if (Arrays.equals(safeValue, BluetoothGattDescriptor.ENABLE_INDICATION_VALUE)) {
+                        if (safeValue.contentEquals(BluetoothGattDescriptor.ENABLE_INDICATION_VALUE)) {
                             addCentralWantingIndications(characteristic, bluetoothCentral)
                         } else {
                             addCentralWantingNotifications(characteristic, bluetoothCentral)
@@ -311,14 +310,20 @@ class BluetoothPeripheralManager(private val context: Context, private val bluet
             var status = GattStatus.SUCCESS
             if (safeValue.size != 2) {
                 status = GattStatus.INVALID_ATTRIBUTE_VALUE_LENGTH
-            } else if (!(Arrays.equals(safeValue, BluetoothGattDescriptor.ENABLE_INDICATION_VALUE)
-                        || Arrays.equals(safeValue, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
-                        || Arrays.equals(safeValue, BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE))
+            } else if (!(safeValue.contentEquals(BluetoothGattDescriptor.ENABLE_INDICATION_VALUE)
+                        || safeValue.contentEquals(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
+                        || safeValue.contentEquals(BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE))
             ) {
                 status = GattStatus.VALUE_NOT_ALLOWED
-            } else if (!supportsIndicate(characteristic) && Arrays.equals(safeValue, BluetoothGattDescriptor.ENABLE_INDICATION_VALUE)) {
+            } else if (!supportsIndicate(characteristic) && safeValue.contentEquals(
+                    BluetoothGattDescriptor.ENABLE_INDICATION_VALUE
+                )
+            ) {
                 status = GattStatus.REQUEST_NOT_SUPPORTED
-            } else if (!supportsNotify(characteristic) && Arrays.equals(safeValue, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)) {
+            } else if (!supportsNotify(characteristic) && safeValue.contentEquals(
+                    BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+                )
+            ) {
                 status = GattStatus.REQUEST_NOT_SUPPORTED
             }
             return status
@@ -381,13 +386,6 @@ class BluetoothPeripheralManager(private val context: Context, private val bluet
             bluetoothCentral.currentMtu = mtu
         }
 
-        override fun onPhyUpdate(device: BluetoothDevice, txPhy: Int, rxPhy: Int, status: Int) {
-            super.onPhyUpdate(device, txPhy, rxPhy, status)
-        }
-
-        override fun onPhyRead(device: BluetoothDevice, txPhy: Int, rxPhy: Int, status: Int) {
-            super.onPhyRead(device, txPhy, rxPhy, status)
-        }
     }
 
     internal val advertiseCallback: AdvertiseCallback = object : AdvertiseCallback() {
@@ -733,7 +731,7 @@ class BluetoothPeripheralManager(private val context: Context, private val bluet
      * @return non-null copy of the source byte array or an empty array if source was null
      */
     fun copyOf(source: ByteArray?): ByteArray {
-        return if (source == null) ByteArray(0) else Arrays.copyOf(source, source.size)
+        return source?.copyOf(source.size) ?: ByteArray(0)
     }
 
     /**

@@ -1,5 +1,5 @@
 /*
- *   Copyright (c) 2023 Martijn van Welie
+ *   Copyright (c) 2025 Martijn van Welie
  *
  *   Permission is hereby granted, free of charge, to any person obtaining a copy
  *   of this software and associated documentation files (the "Software"), to deal
@@ -56,7 +56,7 @@ enum class AdvertiseError(val value: Int) {
     companion object {
         @JvmStatic
         fun fromValue(value: Int): AdvertiseError {
-            for (type in values()) {
+            for (type in entries) {
                 if (type.value == value) return type
             }
             return UNKNOWN_ERROR

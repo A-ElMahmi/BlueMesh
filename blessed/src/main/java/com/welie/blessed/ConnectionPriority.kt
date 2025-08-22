@@ -1,5 +1,5 @@
 /*
- *   Copyright (c) 2023 Martijn van Welie
+ *   Copyright (c) 2025 Martijn van Welie
  *
  *   Permission is hereby granted, free of charge, to any person obtaining a copy
  *   of this software and associated documentation files (the "Software"), to deal
@@ -24,6 +24,7 @@ package com.welie.blessed
 
 import android.bluetooth.BluetoothGatt
 
+@Suppress("unused")
 enum class ConnectionPriority(val value: Int) {
     /**
      * Use the connection parameters recommended by the Bluetooth SIG.

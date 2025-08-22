@@ -1,5 +1,5 @@
 /*
- *   Copyright (c) 2023 Martijn van Welie
+ *   Copyright (c) 2025 Martijn van Welie
  *
  *   Permission is hereby granted, free of charge, to any person obtaining a copy
  *   of this software and associated documentation files (the "Software"), to deal
@@ -37,7 +37,7 @@ class BluetoothCentral internal constructor(val device: BluetoothDevice) {
     val address: String
         get() = device.address
     val name: String
-        get() = if (device.name == null) "" else device.name
+        get() = device.name ?: ""
     val bondState: BondState
         get() = BondState.fromValue(device.bondState)
 

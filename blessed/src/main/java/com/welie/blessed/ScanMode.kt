@@ -5,6 +5,7 @@ import android.bluetooth.le.ScanSettings
 /**
  * This class represents the possible scan modes
  */
+@Suppress("unused")
 enum class ScanMode(val value: Int) {
     /**
      * A special Bluetooth LE scan mode. Applications using this scan mode will passively listen for

@@ -1,5 +1,5 @@
 /*
- *   Copyright (c) 2023 Martijn van Welie
+ *   Copyright (c) 2025 Martijn van Welie
  *
  *   Permission is hereby granted, free of charge, to any person obtaining a copy
  *   of this software and associated documentation files (the "Software"), to deal
@@ -25,6 +25,7 @@ package com.welie.blessed
 /**
  * This class represents the possible Phy options
  */
+@Suppress("unused")
 enum class PhyOptions(val value: Int) {
     /**
      * No preferred option. Use this value in combination with PHY_LE_1M and PHY_LE_2M

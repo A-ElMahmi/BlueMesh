@@ -1,5 +1,6 @@
 package com.example.blessed3
 
+@Suppress("unused")
 enum class ObservationUnit(val notation: String, val mdc: String) {
     BeatsPerMinute("bpm", "MDC_DIM_BEAT_PER_MIN"),
     Celsius("\u00B0C", "MDC_DIM_DEGC"),

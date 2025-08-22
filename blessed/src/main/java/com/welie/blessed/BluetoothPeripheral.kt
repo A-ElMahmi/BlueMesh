@@ -1,5 +1,5 @@
 /*
- *   Copyright (c) 2023 Martijn van Welie
+ *   Copyright (c) 2025 Martijn van Welie
  *
  *   Permission is hereby granted, free of charge, to any person obtaining a copy
  *   of this software and associated documentation files (the "Software"), to deal
@@ -40,7 +40,6 @@ import android.os.Handler
 import android.os.Looper
 import android.os.Parcel
 import android.os.SystemClock
-import java.util.Arrays
 import java.util.Collections
 import java.util.Locale
 import java.util.Queue
@@ -175,11 +174,11 @@ class BluetoothPeripheral internal constructor(
             // Check if this was the Client Characteristic Configuration Descriptor
             if (descriptor.uuid == CCC_DESCRIPTOR_UUID) {
                 if (gattStatus == GattStatus.SUCCESS) {
-                    if (Arrays.equals(value, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE) ||
-                        Arrays.equals(value, BluetoothGattDescriptor.ENABLE_INDICATION_VALUE)
+                    if (value.contentEquals(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE) ||
+                        value.contentEquals(BluetoothGattDescriptor.ENABLE_INDICATION_VALUE)
                     ) {
                         notifyingCharacteristics.add(parentCharacteristic)
-                    } else if (Arrays.equals(value, BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE)) {
+                    } else if (value.contentEquals(BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE)) {
                         notifyingCharacteristics.remove(parentCharacteristic)
                     }
                 }
@@ -1482,7 +1481,7 @@ class BluetoothPeripheral internal constructor(
      * @return non-null copy of the source byte array or an empty array if source was null
      */
     private fun copyOf(source: ByteArray?): ByteArray {
-        return if (source == null) ByteArray(0) else Arrays.copyOf(source, source.size)
+        return source?.copyOf(source.size) ?: ByteArray(0)
     }
 
     /**

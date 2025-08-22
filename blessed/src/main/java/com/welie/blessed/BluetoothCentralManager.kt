@@ -1,5 +1,5 @@
 /*
- *   Copyright (c) 2023 Martijn van Welie
+ *   Copyright (c) 2025 Martijn van Welie
  *
  *   Permission is hereby granted, free of charge, to any person obtaining a copy
  *   of this software and associated documentation files (the "Software"), to deal
@@ -148,7 +148,7 @@ class BluetoothCentralManager(private val context: Context, private val bluetoot
                 if (peripheral != null && callback != null) {
                     connect(peripheral, callback)
                 }
-                if (reconnectPeripheralAddresses.size > 0) {
+                if (reconnectPeripheralAddresses.isNotEmpty()) {
                     scanForAutoConnectPeripherals()
                 }
             }
@@ -622,7 +622,7 @@ class BluetoothCentralManager(private val context: Context, private val bluetoot
             callBackHandler.post { bluetoothCentralManagerCallback.onDisconnected(peripheral, HciStatus.SUCCESS) }
 
             // If there are any devices left, restart the reconnection scan
-            if (reconnectPeripheralAddresses.size > 0) {
+            if (reconnectPeripheralAddresses.isNotEmpty()) {
                 scanForAutoConnectPeripherals()
             }
             return
@@ -863,7 +863,7 @@ class BluetoothCentralManager(private val context: Context, private val bluetoot
 
         // See if the device is bonded
         var peripheralToUnBond: BluetoothDevice? = null
-        if (bondedDevices.size > 0) {
+        if (bondedDevices.isNotEmpty()) {
             for (device in bondedDevices) {
                 if (device.address == peripheralAddress) {
                     peripheralToUnBond = device

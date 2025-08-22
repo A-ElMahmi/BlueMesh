@@ -1,6 +1,5 @@
 package com.example.blessed3
 
-import android.app.Activity
 import android.bluetooth.BluetoothAdapter
 import android.content.Intent
 import android.os.Bundle
@@ -77,7 +76,7 @@ class MainActivity : ComponentActivity() {
         }
 
     private val enableBleRequest = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
+        if (result.resultCode == RESULT_OK) {
             restartScanning()
         }
     }

@@ -23,7 +23,7 @@ enum class Transport(val value: Int) {
 
     companion object {
         fun fromValue(value: Int): Transport {
-            for (transport in values()) {
+            for (transport in entries) {
                 if (transport.value == value) return transport
             }
             return AUTO

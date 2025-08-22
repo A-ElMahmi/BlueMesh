@@ -3,6 +3,7 @@ package com.welie.blessed
 import android.util.Log
 import timber.log.Timber
 
+@Suppress("unused")
 internal object Logger {
     var enabled = true
 
