@@ -856,6 +856,20 @@ class BluetoothPeripheralManager(private val context: Context, private val bluet
     }
 
     /**
+     * Enable logging
+     */
+    fun enableLogging() {
+        Logger.enabled = true
+    }
+
+    /**
+     * Disable logging
+     */
+    fun disableLogging() {
+        Logger.enabled = false
+    }
+
+    /**
      * Create a BluetoothPeripheralManager
      *
      */
