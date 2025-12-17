@@ -41,6 +41,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.ParcelUuid
+import android.util.Log
 import com.welie.blessed.BluetoothPeripheral.InternalCallback
 import com.welie.blessed.BluetoothPeripheralCallback.NULL
 import java.util.UUID
@@ -83,15 +84,17 @@ class BluetoothCentralManager(private val context: Context, private val bluetoot
     private var transport = DEFAULT_TRANSPORT
 
     private val scanByNameCallback: ScanCallback = object : ScanCallback() {
+        override fun onBatchScanResults(results: List<ScanResult>) {
+            synchronized(this) {
+                results.forEach { result ->
+                    sendFilteredScanResult(result)
+                }
+            }
+        }
+
         override fun onScanResult(callbackType: Int, result: ScanResult) {
             synchronized(this) {
-                val deviceName = result.device.name ?: return
-                for (name in scanPeripheralNames) {
-                    if (deviceName.contains(name)) {
-                        sendScanResult(result)
-                        return
-                    }
-                }
+                sendFilteredScanResult(result)
             }
         }
 
@@ -99,9 +102,26 @@ class BluetoothCentralManager(private val context: Context, private val bluetoot
             stopScan()
             sendScanFailed(ScanFailure.fromValue(errorCode))
         }
+        private fun sendFilteredScanResult(result: ScanResult) {
+            val deviceName = result.device.name ?: return
+            for (name in scanPeripheralNames) {
+                if (deviceName.contains(name)) {
+                    sendScanResult(result)
+                    return
+                }
+            }
+        }
     }
 
     private val defaultScanCallback: ScanCallback = object : ScanCallback() {
+        override fun onBatchScanResults(results: List<ScanResult>) {
+            synchronized(this) {
+                results.forEach { result ->
+                    sendScanResult(result)
+                }
+            }
+        }
+
         override fun onScanResult(callbackType: Int, result: ScanResult) {
             synchronized(this) { sendScanResult(result) }
         }
