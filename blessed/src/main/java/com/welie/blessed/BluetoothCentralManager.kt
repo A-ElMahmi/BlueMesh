@@ -41,7 +41,6 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.ParcelUuid
-import android.util.Log
 import com.welie.blessed.BluetoothPeripheral.InternalCallback
 import com.welie.blessed.BluetoothPeripheralCallback.NULL
 import java.util.UUID
@@ -102,6 +101,7 @@ class BluetoothCentralManager(private val context: Context, private val bluetoot
             stopScan()
             sendScanFailed(ScanFailure.fromValue(errorCode))
         }
+
         private fun sendFilteredScanResult(result: ScanResult) {
             val deviceName = result.device.name ?: return
             for (name in scanPeripheralNames) {
