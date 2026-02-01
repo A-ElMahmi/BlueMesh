@@ -697,9 +697,10 @@ class BluetoothCentralManager(private val context: Context, private val bluetoot
      * Get a peripheral object matching the specified mac address.
      *
      * @param peripheralAddress mac address
-     * @return a BluetoothPeripheral object matching the specified mac address or null if it was not found
+     * @param addressType address type, only supported on Android 13 and higher
+     * @return a BluetoothPeripheral object matching the specified mac address and address type
      */
-    fun getPeripheral(peripheralAddress: String): BluetoothPeripheral {
+    fun getPeripheral(peripheralAddress: String, addressType: AddressType = AddressType.PUBLIC): BluetoothPeripheral {
         if (!BluetoothAdapter.checkBluetoothAddress(peripheralAddress)) {
             val message = String.format("%s is not a valid bluetooth address. Make sure all alphabetic characters are uppercase.", peripheralAddress)
             throw IllegalArgumentException(message)
@@ -711,10 +712,23 @@ class BluetoothCentralManager(private val context: Context, private val bluetoot
         } else if (scannedPeripherals.containsKey(peripheralAddress)) {
             requireNotNull(scannedPeripherals[peripheralAddress])
         } else {
-            val peripheral = BluetoothPeripheral(context, bluetoothAdapter.getRemoteDevice(peripheralAddress), internalCallback, NULL(), callBackHandler, transport)
+            val peripheral = BluetoothPeripheral(context, getDevice(peripheralAddress, addressType), internalCallback, NULL(), callBackHandler, transport)
             scannedPeripherals[peripheralAddress] = peripheral
             peripheral
         }
+    }
+
+    /**
+     * Get the BluetoothDevice for the specified address and address type.
+     * Address type is only supported on Android 13 and higher.
+     *
+     * @param peripheralAddress mac address
+     */
+    private fun getDevice(peripheralAddress: String, addressType: AddressType = AddressType.PUBLIC): BluetoothDevice {
+        if (Build.VERSION.SDK_INT >= 33) {
+            return bluetoothAdapter.getRemoteLeDevice(peripheralAddress, addressType.value)
+        }
+        return bluetoothAdapter.getRemoteDevice(peripheralAddress)
     }
 
     /**

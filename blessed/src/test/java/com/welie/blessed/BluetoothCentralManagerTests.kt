@@ -110,6 +110,7 @@ class BluetoothCentralManagerTests {
         val scanResult = getScanResult(device)
         every { bluetoothAdapter.isEnabled } returns true
         every { bluetoothAdapter.getRemoteDevice(DEVICE_ADDRESS) } returns device
+        every { bluetoothAdapter.getRemoteLeDevice(DEVICE_ADDRESS, AddressType.UNKNOWN.value)} returns device
 
         // When
         central.scanForPeripherals()
@@ -246,6 +247,7 @@ class BluetoothCentralManagerTests {
         val scanResult = getScanResult(device)
         every { bluetoothAdapter.isEnabled } returns true
         every { bluetoothAdapter.getRemoteDevice(DEVICE_ADDRESS) } returns device
+        every { bluetoothAdapter.getRemoteLeDevice(DEVICE_ADDRESS, AddressType.UNKNOWN.value)} returns device
 
         // When
         central.scanForPeripheralsWithNames(setOf(DEVICE_NAME))
@@ -848,6 +850,7 @@ class BluetoothCentralManagerTests {
         every { bluetoothAdapter.isEnabled } returns true
         val device = getDevice(address = DEVICE_ADDRESS)
         every { bluetoothAdapter.getRemoteDevice(DEVICE_ADDRESS)} returns device
+        every { bluetoothAdapter.getRemoteLeDevice(DEVICE_ADDRESS, AddressType.UNKNOWN.value)} returns device
         central.setTransport(Transport.BR_EDR)
 
         // When
@@ -921,6 +924,7 @@ class BluetoothCentralManagerTests {
         every { device.writeToParcel(any(), any()) } returns Unit
         return device
     }
+
 
     companion object {
         private const val DEVICE_ADDRESS = "12:23:34:45:56:67"

@@ -543,28 +543,20 @@ class BluetoothPeripheral internal constructor(
             return AddressType.UNKNOWN
         }
 
-        val parcel = Parcel.obtain()
-        writeToParcel(parcel, 0)
-        parcel.setDataPosition(0)
-        parcel.readString() // Skip address
-        val mAddressType = parcel.readInt()
-        parcel.recycle()
-
-        return when (mAddressType) {
-            BluetoothDevice.ADDRESS_TYPE_PUBLIC -> AddressType.PUBLIC
-            BluetoothDevice.ADDRESS_TYPE_RANDOM ->
-                when (address.substring(0, 1).toInt(16).shr(2)) {
-                    ADDRESS_TYPE_RANDOM_STATIC_BITS_VALUE ->
-                        AddressType.RANDOM_STATIC
-                    ADDRESS_TYPE_RANDOM_RESOLVABLE_BITS_VALUE ->
-                        AddressType.RANDOM_RESOLVABLE
-                    ADDRESS_TYPE_RANDOM_NON_RESOLVABLE_BITS_VALUE ->
-                        AddressType.RANDOM_NON_RESOLVABLE
-                    else -> AddressType.UNKNOWN
-                }
-            BluetoothDevice.ADDRESS_TYPE_UNKNOWN -> AddressType.UNKNOWN
-            else -> AddressType.UNKNOWN
+        val mAddressType = if(Build.VERSION.SDK_INT < 35) {
+            // Android 13 and 14 do not have a public API to get the address type, so we need to use Parcel hack
+            val parcel = Parcel.obtain()
+            writeToParcel(parcel, 0)
+            parcel.setDataPosition(0)
+            parcel.readString() // Skip address
+            val addressType = parcel.readInt()
+            parcel.recycle()
+            addressType
+        } else {
+            this.addressType
         }
+
+        return AddressType.fromValue(mAddressType)
     }
 
     /**
