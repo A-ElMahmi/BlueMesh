@@ -7,6 +7,8 @@ import android.os.Handler
 import android.os.Looper
 import com.welie.blessed.BluetoothCentral
 import com.welie.blessed.BluetoothPeripheralManager
+import com.welie.blessed.GattStatus
+import com.welie.blessed.ReadResponse
 import timber.log.Timber
 import java.util.UUID
 
@@ -14,7 +16,7 @@ internal class HeartRateService(peripheralManager: BluetoothPeripheralManager) :
     BaseService(
         peripheralManager,
         BluetoothGattService(HRS_SERVICE_UUID, SERVICE_TYPE_PRIMARY),
-        "HeartRate Service"
+        "Counter"
     ) {
 
     private val measurement = BluetoothGattCharacteristic(
@@ -22,13 +24,23 @@ internal class HeartRateService(peripheralManager: BluetoothPeripheralManager) :
         BluetoothGattCharacteristic.PROPERTY_NOTIFY,
         0
     )
+
+    private val newChar = BluetoothGattCharacteristic(
+        NEW_CHARACTERISTIC_UUID,
+        BluetoothGattCharacteristic.PROPERTY_READ,
+        BluetoothGattCharacteristic.PERMISSION_READ
+    )
+
     private val handler = Handler(Looper.getMainLooper())
     private val notifyRunnable = Runnable { notifyHeartRate() }
-    private var currentHR = 80
+    private var currentHR = 1
 
     init {
         service.addCharacteristic(measurement)
         measurement.addDescriptor(cccDescriptor)
+
+        service.addCharacteristic(newChar)
+        newChar.addDescriptor(cudDescriptor)
     }
 
     override fun onCentralDisconnected(central: BluetoothCentral) {
@@ -49,10 +61,18 @@ internal class HeartRateService(peripheralManager: BluetoothPeripheralManager) :
         }
     }
 
+    override fun onCharacteristicRead(
+        central: BluetoothCentral,
+        characteristic: BluetoothGattCharacteristic
+    ): ReadResponse {
+        println("Reading any property...")
+        return ReadResponse(GattStatus.SUCCESS, "Alhamdolilah".toByteArray())
+    }
+
     private fun notifyHeartRate() {
-        currentHR += (Math.random() * 10 - 5).toInt()
-        if (currentHR > 120) currentHR = 100
+        currentHR = (currentHR + 2) % 30
         val value = byteArrayOf(0x00, currentHR.toByte())
+
         notifyCharacteristicChanged(value, measurement)
         handler.postDelayed(notifyRunnable, 1000)
         Timber.i("new hr: %d", currentHR)
@@ -65,5 +85,6 @@ internal class HeartRateService(peripheralManager: BluetoothPeripheralManager) :
     companion object {
         val HRS_SERVICE_UUID: UUID = UUID.fromString("0000180D-0000-1000-8000-00805f9b34fb")
         private val HEARTRATE_MEASUREMENT_CHARACTERISTIC_UUID: UUID = UUID.fromString("00002A37-0000-1000-8000-00805f9b34fb")
+        private val NEW_CHARACTERISTIC_UUID: UUID = UUID.fromString("00002A39-0000-1000-8000-00805f9b34fb")
     }
 }

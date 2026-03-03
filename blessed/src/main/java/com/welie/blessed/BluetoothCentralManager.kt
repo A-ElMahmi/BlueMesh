@@ -65,7 +65,7 @@ class BluetoothCentralManager(private val context: Context, private val bluetoot
     private val scannedPeripherals: MutableMap<String, BluetoothPeripheral> = ConcurrentHashMap()
 
     private val reconnectPeripheralAddresses: MutableList<String> = ArrayList()
-    private val reconnectCallbacks: MutableMap<String, BluetoothPeripheralCallback?> = ConcurrentHashMap()
+    private val reconnectCallbacks: MutableMap<String, BluetoothPeripheralCallback> = ConcurrentHashMap()
     private var scanPeripheralNames = emptySet<String>()
     private val mainHandler = Handler(Looper.getMainLooper())
     private var timeoutRunnable: Runnable? = null
@@ -672,10 +672,12 @@ class BluetoothCentralManager(private val context: Context, private val bluetoot
         }
 
         // Find the uncached peripherals and issue autoConnectPeripheral for the cached ones
-        val uncachedPeripherals: MutableMap<BluetoothPeripheral, BluetoothPeripheralCallback?> = HashMap()
+        val uncachedPeripherals: MutableMap<BluetoothPeripheral, BluetoothPeripheralCallback> = HashMap()
         for (peripheral in batch.keys) {
             if (peripheral.isUncached) {
-                uncachedPeripherals[peripheral] = batch[peripheral]
+                batch[peripheral]?.let {
+                    uncachedPeripherals[peripheral] = it
+                }
             } else {
                 autoConnect(peripheral, batch[peripheral]!!)
             }
@@ -686,7 +688,9 @@ class BluetoothCentralManager(private val context: Context, private val bluetoot
             for (peripheral in uncachedPeripherals.keys) {
                 val peripheralAddress = peripheral.address
                 reconnectPeripheralAddresses.add(peripheralAddress)
-                reconnectCallbacks[peripheralAddress] = uncachedPeripherals[peripheral]
+                uncachedPeripherals[peripheral]?.let {
+                    reconnectCallbacks[peripheralAddress] = it
+                }
                 unconnectedPeripherals[peripheralAddress] = peripheral
             }
             scanForAutoConnectPeripherals()

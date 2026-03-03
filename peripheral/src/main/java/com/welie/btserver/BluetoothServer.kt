@@ -127,12 +127,10 @@ class BluetoothServer(private val context: Context) {
 
         peripheralManager.openGattServer()
         peripheralManager.removeAllServices()
-        val dis = DeviceInformationService(peripheralManager)
-        val cts = CurrentTimeService(peripheralManager)
+
         val hrs = HeartRateService(peripheralManager)
-        serviceImplementations[dis.service] = dis
-        serviceImplementations[cts.service] = cts
         serviceImplementations[hrs.service] = hrs
+
         setupServices()
         isInitialized = true
     }
