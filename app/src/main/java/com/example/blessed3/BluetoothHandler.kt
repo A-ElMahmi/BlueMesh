@@ -63,8 +63,8 @@ object BluetoothHandler {
     private val BLP_MEASUREMENT_CHARACTERISTIC_UUID: UUID = UUID.fromString("00002A35-0000-1000-8000-00805f9b34fb")
 
     // UUIDs for the Health Thermometer service (HTS)
-    private val HTS_SERVICE_UUID = from16BitString("1809")
-    private val HTS_MEASUREMENT_CHARACTERISTIC_UUID = from16BitString("2A1C")
+//    private val HTS_SERVICE_UUID = from16BitString("1809")
+//    private val HTS_MEASUREMENT_CHARACTERISTIC_UUID = from16BitString("2A1C")
 
     // UUIDs for the Heart Rate service (HRS)
     private val HRS_SERVICE_UUID: UUID = UUID.fromString("0000180D-0000-1000-8000-00805f9b34fb")
@@ -99,35 +99,39 @@ object BluetoothHandler {
     val CONTOUR_SERVICE_UUID: UUID = UUID.fromString("00000000-0002-11E2-9E96-0800200C9A66")
     private val CONTOUR_CLOCK = UUID.fromString("00001026-0002-11E2-9E96-0800200C9A66")
 
+    private val NEW_CHARACTERISTIC_UUID: UUID = UUID.fromString("00002A39-0000-1000-8000-00805f9b34fb")
+
     private val bluetoothPeripheralCallback = object : BluetoothPeripheralCallback() {
         override fun onServicesDiscovered(peripheral: BluetoothPeripheral) {
             peripheral.requestConnectionPriority(ConnectionPriority.HIGH)
-            peripheral.readCharacteristic(DIS_SERVICE_UUID, MANUFACTURER_NAME_CHARACTERISTIC_UUID)
-            peripheral.readCharacteristic(DIS_SERVICE_UUID, MODEL_NUMBER_CHARACTERISTIC_UUID)
+//            peripheral.readCharacteristic(DIS_SERVICE_UUID, MANUFACTURER_NAME_CHARACTERISTIC_UUID)
+//            peripheral.readCharacteristic(DIS_SERVICE_UUID, MODEL_NUMBER_CHARACTERISTIC_UUID)
 
             // Write Current Time if possible
-            peripheral.getCharacteristic(CTS_SERVICE_UUID, CURRENT_TIME_CHARACTERISTIC_UUID)?.let {
-                peripheral.startNotify(it)
+//            peripheral.getCharacteristic(CTS_SERVICE_UUID, CURRENT_TIME_CHARACTERISTIC_UUID)?.let {
+//                peripheral.startNotify(it)
+//
+//                // If it has the write property we write the current time
+//                if (it.supportsWritingWithResponse()) {
+//                    // Write the current time unless it is an Omron device
+//                    if (!peripheral.name.contains("BLEsmart_", true)) {
+//                        val currentTime = currentTimeByteArrayOf(Calendar.getInstance())
+//                        peripheral.writeCharacteristic(it, currentTime, WITH_RESPONSE)
+//                    }
+//                }
+//            }
 
-                // If it has the write property we write the current time
-                if (it.supportsWritingWithResponse()) {
-                    // Write the current time unless it is an Omron device
-                    if (!peripheral.name.contains("BLEsmart_", true)) {
-                        val currentTime = currentTimeByteArrayOf(Calendar.getInstance())
-                        peripheral.writeCharacteristic(it, currentTime, WITH_RESPONSE)
-                    }
-                }
-            }
-
-            peripheral.readCharacteristic(BTS_SERVICE_UUID, BATTERY_LEVEL_CHARACTERISTIC_UUID)
-            peripheral.startNotify(BLP_SERVICE_UUID, BLP_MEASUREMENT_CHARACTERISTIC_UUID)
-            peripheral.startNotify(HTS_SERVICE_UUID, HTS_MEASUREMENT_CHARACTERISTIC_UUID)
+//            peripheral.readCharacteristic(BTS_SERVICE_UUID, BATTERY_LEVEL_CHARACTERISTIC_UUID)
+//            peripheral.startNotify(BLP_SERVICE_UUID, BLP_MEASUREMENT_CHARACTERISTIC_UUID)
+            peripheral.readCharacteristic(HRS_SERVICE_UUID, NEW_CHARACTERISTIC_UUID)
+            println("startNotify()")
+//            peripheral.startNotify(HTS_SERVICE_UUID, HTS_MEASUREMENT_CHARACTERISTIC_UUID)
             peripheral.startNotify(HRS_SERVICE_UUID, HRS_MEASUREMENT_CHARACTERISTIC_UUID)
-            peripheral.startNotify(GLUCOSE_SERVICE_UUID, GLUCOSE_MEASUREMENT_CHARACTERISTIC_UUID)
-            peripheral.startNotify(PLX_SERVICE_UUID, PLX_SPOT_MEASUREMENT_CHAR_UUID)
-            peripheral.startNotify(PLX_SERVICE_UUID, PLX_CONTINUOUS_MEASUREMENT_CHAR_UUID)
-            peripheral.startNotify(WSS_SERVICE_UUID, WSS_MEASUREMENT_CHAR_UUID)
-            peripheral.startNotify(CONTOUR_SERVICE_UUID, CONTOUR_CLOCK)
+//            peripheral.startNotify(GLUCOSE_SERVICE_UUID, GLUCOSE_MEASUREMENT_CHARACTERISTIC_UUID)
+//            peripheral.startNotify(PLX_SERVICE_UUID, PLX_SPOT_MEASUREMENT_CHAR_UUID)
+//            peripheral.startNotify(PLX_SERVICE_UUID, PLX_CONTINUOUS_MEASUREMENT_CHAR_UUID)
+//            peripheral.startNotify(WSS_SERVICE_UUID, WSS_MEASUREMENT_CHAR_UUID)
+//            peripheral.startNotify(CONTOUR_SERVICE_UUID, CONTOUR_CLOCK)
         }
 
         override fun onNotificationStateUpdate(peripheral: BluetoothPeripheral, characteristic: BluetoothGattCharacteristic, status: GattStatus) {
@@ -146,57 +150,61 @@ object BluetoothHandler {
 
         override fun onCharacteristicUpdate(peripheral: BluetoothPeripheral, value: ByteArray, characteristic: BluetoothGattCharacteristic, status: GattStatus) {
             when (characteristic.uuid) {
-                MANUFACTURER_NAME_CHARACTERISTIC_UUID -> {
-                    Timber.i("Manufacturer: ${value.getString()}")
-                }
+//                MANUFACTURER_NAME_CHARACTERISTIC_UUID -> {
+//                    Timber.i("Manufacturer: ${value.getString()}")
+//                }
+//
+//                MODEL_NUMBER_CHARACTERISTIC_UUID -> {
+//                    Timber.i("Model: ${value.getString()}")
+//                }
+//
+//                BATTERY_LEVEL_CHARACTERISTIC_UUID -> {
+//                    Timber.i("Battery: ${value.getUInt8()}")
+//                }
+//
+//                CURRENT_TIME_CHARACTERISTIC_UUID -> {
+//                    val currentTime = BluetoothBytesParser(value).getDateTime()
+//                    val dateFormat: DateFormat = SimpleDateFormat("dd-MM-yyyy HH:mm:ss", Locale.ENGLISH)
+//                    Timber.i("Current time: ${dateFormat.format(currentTime)}")
+//                }
 
-                MODEL_NUMBER_CHARACTERISTIC_UUID -> {
-                    Timber.i("Model: ${value.getString()}")
-                }
+//                HTS_MEASUREMENT_CHARACTERISTIC_UUID -> {
+//                    val measurement = TemperatureMeasurement.fromBytes(value) ?: return
+//                    sendMeasurement(measurement.toString())
+//                }
 
-                BATTERY_LEVEL_CHARACTERISTIC_UUID -> {
-                    Timber.i("Battery: ${value.getUInt8()}")
-                }
-
-                CURRENT_TIME_CHARACTERISTIC_UUID -> {
-                    val currentTime = BluetoothBytesParser(value).getDateTime()
-                    val dateFormat: DateFormat = SimpleDateFormat("dd-MM-yyyy HH:mm:ss", Locale.ENGLISH)
-                    Timber.i("Current time: ${dateFormat.format(currentTime)}")
-                }
-
-                HTS_MEASUREMENT_CHARACTERISTIC_UUID -> {
-                    val measurement = TemperatureMeasurement.fromBytes(value) ?: return
-                    sendMeasurement(measurement.toString())
-                }
-
-                WSS_MEASUREMENT_CHAR_UUID -> {
-                    val measurement = WeightMeasurement.fromBytes(value) ?: return
-                    sendMeasurement(measurement.toString())
-                }
-
-                PLX_SPOT_MEASUREMENT_CHAR_UUID -> {
-                    val measurement = PulseOximeterSpotMeasurement.fromBytes(value) ?: return
-                    sendMeasurement(measurement.toString())
-                }
-
-                PLX_CONTINUOUS_MEASUREMENT_CHAR_UUID -> {
-                    val measurement = PulseOximeterContinuousMeasurement.fromBytes(value) ?: return
-                    sendMeasurement(measurement.toString())
-                }
-
-                BLP_MEASUREMENT_CHARACTERISTIC_UUID -> {
-                    val measurement = BloodPressureMeasurement.fromBytes(value) ?: return
-                    sendMeasurement(measurement.toString())
-                }
-
-                GLUCOSE_MEASUREMENT_CHARACTERISTIC_UUID -> {
-                    val measurement = GlucoseMeasurement.fromBytes(value) ?: return
-                    sendMeasurement(measurement.toString())
-                }
-
+//                WSS_MEASUREMENT_CHAR_UUID -> {
+//                    val measurement = WeightMeasurement.fromBytes(value) ?: return
+//                    sendMeasurement(measurement.toString())
+//                }
+//
+//                PLX_SPOT_MEASUREMENT_CHAR_UUID -> {
+//                    val measurement = PulseOximeterSpotMeasurement.fromBytes(value) ?: return
+//                    sendMeasurement(measurement.toString())
+//                }
+//
+//                PLX_CONTINUOUS_MEASUREMENT_CHAR_UUID -> {
+//                    val measurement = PulseOximeterContinuousMeasurement.fromBytes(value) ?: return
+//                    sendMeasurement(measurement.toString())
+//                }
+//
+//                BLP_MEASUREMENT_CHARACTERISTIC_UUID -> {
+//                    val measurement = BloodPressureMeasurement.fromBytes(value) ?: return
+//                    sendMeasurement(measurement.toString())
+//                }
+//
+//                GLUCOSE_MEASUREMENT_CHARACTERISTIC_UUID -> {
+//                    val measurement = GlucoseMeasurement.fromBytes(value) ?: return
+//                    sendMeasurement(measurement.toString())
+//                }
+//
                 HRS_MEASUREMENT_CHARACTERISTIC_UUID -> {
                     val measurement = HeartRateMeasurement.fromBytes(value) ?: return
                     sendMeasurement(measurement.toString())
+                }
+
+                NEW_CHARACTERISTIC_UUID -> {
+                    println(value.toString())
                 }
             }
         }
@@ -242,8 +250,10 @@ object BluetoothHandler {
 
             if (peripheral.needsBonding() && peripheral.bondState == BondState.NONE) {
                 // Create a bond immediately to avoid double pairing popups
+                println("Bonding...")
                 centralManager.createBond(peripheral, bluetoothPeripheralCallback)
             } else {
+                println("Not bonding (connecting)...")
                 centralManager.connect(peripheral, bluetoothPeripheralCallback)
             }
         }
@@ -284,7 +294,7 @@ object BluetoothHandler {
                     BLP_SERVICE_UUID,
                     GLUCOSE_SERVICE_UUID,
                     HRS_SERVICE_UUID,
-                    HTS_SERVICE_UUID,
+//                    HTS_SERVICE_UUID,
                     PLX_SERVICE_UUID,
                     WSS_SERVICE_UUID
                 )
