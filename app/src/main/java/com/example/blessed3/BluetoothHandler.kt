@@ -73,16 +73,15 @@ object BluetoothHandler {
         override fun onCharacteristicUpdate(peripheral: BluetoothPeripheral, value: ByteArray, characteristic: BluetoothGattCharacteristic, status: GattStatus) {
             when (characteristic.uuid) {
                 HRS_MEASUREMENT_CHARACTERISTIC_UUID -> {
-                    val measurement = HeartRateMeasurement.fromBytes(value) ?: return
-
                     scope.launch {
-                        Timber.i(measurement.toString())
-                        measurementFlow_.emit(measurement.toString())
+                        Timber.i(value.toString(Charsets.UTF_8))
+                        measurementFlow_.emit(value.toString(Charsets.UTF_8))
                     }
                 }
 
                 NEW_CHARACTERISTIC_UUID -> {
-                    println("New Char: $value")
+                    val text = value.toString(Charsets.UTF_8)
+                    println("New Char: $text")
                 }
             }
         }

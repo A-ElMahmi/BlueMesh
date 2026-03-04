@@ -40,7 +40,7 @@ internal class HeartRateService(peripheralManager: BluetoothPeripheralManager) :
         measurement.addDescriptor(cccDescriptor)
 
         service.addCharacteristic(newChar)
-        newChar.addDescriptor(cudDescriptor)
+//        newChar.addDescriptor(cudDescriptor)
     }
 
     override fun onCentralDisconnected(central: BluetoothCentral) {
@@ -66,14 +66,13 @@ internal class HeartRateService(peripheralManager: BluetoothPeripheralManager) :
         characteristic: BluetoothGattCharacteristic
     ): ReadResponse {
         println("Reading any property...")
-        return ReadResponse(GattStatus.SUCCESS, "Alhamdolilah".toByteArray())
+        return ReadResponse(GattStatus.SUCCESS, "Alhamdolilah. This is a really long message that should be broken up into multiple packets. Will it arrive? Bismillah".toByteArray())
     }
 
     private fun notifyHeartRate() {
         currentHR = (currentHR + 2) % 30
-        val value = byteArrayOf(0x00, currentHR.toByte())
 
-        notifyCharacteristicChanged(value, measurement)
+        notifyCharacteristicChanged("$currentHR".toByteArray(), measurement)
         handler.postDelayed(notifyRunnable, 1000)
         Timber.i("new hr: %d", currentHR)
     }
