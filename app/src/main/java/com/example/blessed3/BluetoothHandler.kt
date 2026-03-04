@@ -19,6 +19,7 @@ import com.welie.blessed.BondState
 import com.welie.blessed.ConnectionPriority
 import com.welie.blessed.GattStatus
 import com.welie.blessed.HciStatus
+import com.welie.blessed.WriteType
 import com.welie.blessed.WriteType.WITH_RESPONSE
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -56,9 +57,12 @@ object BluetoothHandler {
     private val bluetoothPeripheralCallback = object : BluetoothPeripheralCallback() {
         override fun onServicesDiscovered(peripheral: BluetoothPeripheral) {
             peripheral.requestConnectionPriority(ConnectionPriority.HIGH)
-            peripheral.readCharacteristic(HRS_SERVICE_UUID, NEW_CHARACTERISTIC_UUID)
-            println("startNotify()")
+//            peripheral.readCharacteristic(HRS_SERVICE_UUID, NEW_CHARACTERISTIC_UUID)
             peripheral.startNotify(HRS_SERVICE_UUID, HRS_MEASUREMENT_CHARACTERISTIC_UUID)
+
+
+            peripheral.writeCharacteristic(HRS_SERVICE_UUID, NEW_CHARACTERISTIC_UUID, "Mashallah".toByteArray(),
+                WriteType.WITH_RESPONSE)
         }
 
         override fun onNotificationStateUpdate(peripheral: BluetoothPeripheral, characteristic: BluetoothGattCharacteristic, status: GattStatus) {
@@ -75,7 +79,10 @@ object BluetoothHandler {
                 HRS_MEASUREMENT_CHARACTERISTIC_UUID -> {
                     scope.launch {
                         Timber.i(value.toString(Charsets.UTF_8))
-                        measurementFlow_.emit(value.toString(Charsets.UTF_8))
+//                        measurementFlow_.emit(value.toString(Charsets.UTF_8))
+                        scope.launch(Dispatchers.Main) {
+                            Toast.makeText(context, value.toString(Charsets.UTF_8), Toast.LENGTH_SHORT).show()
+                        }
                     }
                 }
 
