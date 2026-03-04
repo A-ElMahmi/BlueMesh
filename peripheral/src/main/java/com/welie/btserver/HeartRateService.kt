@@ -3,8 +3,10 @@ package com.welie.btserver
 import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothGattService
 import android.bluetooth.BluetoothGattService.SERVICE_TYPE_PRIMARY
+import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.widget.Toast
 import com.welie.blessed.BluetoothCentral
 import com.welie.blessed.BluetoothPeripheralManager
 import com.welie.blessed.GattStatus
@@ -12,7 +14,7 @@ import com.welie.blessed.ReadResponse
 import timber.log.Timber
 import java.util.UUID
 
-internal class HeartRateService(peripheralManager: BluetoothPeripheralManager) :
+internal class HeartRateService(peripheralManager: BluetoothPeripheralManager, val context: Context) :
     BaseService(
         peripheralManager,
         BluetoothGattService(HRS_SERVICE_UUID, SERVICE_TYPE_PRIMARY),
@@ -27,8 +29,8 @@ internal class HeartRateService(peripheralManager: BluetoothPeripheralManager) :
 
     private val newChar = BluetoothGattCharacteristic(
         NEW_CHARACTERISTIC_UUID,
-        BluetoothGattCharacteristic.PROPERTY_READ,
-        BluetoothGattCharacteristic.PERMISSION_READ
+        BluetoothGattCharacteristic.PROPERTY_READ or BluetoothGattCharacteristic.PROPERTY_WRITE,
+        BluetoothGattCharacteristic.PERMISSION_READ or BluetoothGattCharacteristic.PERMISSION_WRITE,
     )
 
     private val handler = Handler(Looper.getMainLooper())
@@ -66,8 +68,19 @@ internal class HeartRateService(peripheralManager: BluetoothPeripheralManager) :
         return ReadResponse(GattStatus.SUCCESS, "Alhamdolilah. This is a really long message that should be broken up into multiple packets. Will it arrive? Bismillah".toByteArray())
     }
 
+    override fun onCharacteristicWrite(
+        central: BluetoothCentral,
+        characteristic: BluetoothGattCharacteristic,
+        value: ByteArray
+    ): GattStatus {
+        println("Message arrived: ${value.toString(Charsets.UTF_8)}")
+        Toast.makeText(context, value.toString(Charsets.UTF_8), Toast.LENGTH_SHORT).show()
+
+        return GattStatus.SUCCESS
+    }
+
     private fun notifyHeartRate() {
-        notifyCharacteristicChanged("Start notify".toByteArray(), measurement)
+        notifyCharacteristicChanged("Start notify: ${System.currentTimeMillis()}".toByteArray(), measurement)
         Timber.i("Notify...")
     }
 
