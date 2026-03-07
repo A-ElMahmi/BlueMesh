@@ -54,8 +54,11 @@ object BluetoothHandler {
     private val HRS_MEASUREMENT_CHARACTERISTIC_UUID: UUID = UUID.fromString("00002A37-0000-1000-8000-00805f9b34fb")
     private val NEW_CHARACTERISTIC_UUID: UUID = UUID.fromString("00002A39-0000-1000-8000-00805f9b34fb")
 
+    private lateinit var peripheralGlobal: BluetoothPeripheral
+
     private val bluetoothPeripheralCallback = object : BluetoothPeripheralCallback() {
         override fun onServicesDiscovered(peripheral: BluetoothPeripheral) {
+            peripheralGlobal = peripheral
             peripheral.requestConnectionPriority(ConnectionPriority.HIGH)
 //            peripheral.readCharacteristic(HRS_SERVICE_UUID, NEW_CHARACTERISTIC_UUID)
             peripheral.startNotify(HRS_SERVICE_UUID, HRS_MEASUREMENT_CHARACTERISTIC_UUID)
@@ -92,6 +95,11 @@ object BluetoothHandler {
                 }
             }
         }
+
+    }
+
+    fun send_msg() {
+        peripheralGlobal.writeCharacteristic(HRS_SERVICE_UUID, NEW_CHARACTERISTIC_UUID, "Sent".toByteArray(), WITH_RESPONSE)
 
     }
 

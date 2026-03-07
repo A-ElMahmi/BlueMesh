@@ -15,8 +15,11 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,9 +40,17 @@ class MainActivity : ComponentActivity() {
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .fillMaxHeight()) {
+                        .fillMaxHeight()
+                ) {
 
-                    Text(text = "Peripheral running", fontSize = 24.sp)
+                    Text(
+                        text = "Peripheral running",
+                        fontSize = 24.sp
+                    )
+
+                    Button(onClick = { BluetoothServer.getInstance(applicationContext).send_msg() }) {
+                        Text("Send")
+                    }
                 }
             }
         }

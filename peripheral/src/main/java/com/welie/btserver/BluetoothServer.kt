@@ -93,6 +93,7 @@ class BluetoothServer(private val context: Context) {
             }
         }
     }
+    private lateinit var hrs: HeartRateService
 
     fun startAdvertising() {
         startAdvertising(HeartRateService.HRS_SERVICE_UUID)
@@ -128,11 +129,15 @@ class BluetoothServer(private val context: Context) {
         peripheralManager.openGattServer()
         peripheralManager.removeAllServices()
 
-        val hrs = HeartRateService(peripheralManager, context)
+        hrs = HeartRateService(peripheralManager, context)
         serviceImplementations[hrs.service] = hrs
 
         setupServices()
         isInitialized = true
+    }
+
+    fun send_msg() {
+        hrs.notifyHeartRate()
     }
 
     init {

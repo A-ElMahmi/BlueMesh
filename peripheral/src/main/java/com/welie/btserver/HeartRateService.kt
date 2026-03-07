@@ -79,7 +79,7 @@ internal class HeartRateService(peripheralManager: BluetoothPeripheralManager, v
         return GattStatus.SUCCESS
     }
 
-    private fun notifyHeartRate() {
+    fun notifyHeartRate() {
         notifyCharacteristicChanged("Start notify: ${System.currentTimeMillis()}".toByteArray(), measurement)
         Timber.i("Notify...")
     }
