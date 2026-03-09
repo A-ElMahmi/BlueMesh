@@ -10,6 +10,7 @@ import android.os.HandlerThread
 import android.os.Process
 import android.widget.Toast
 import android.widget.Toast.LENGTH_SHORT
+import androidx.compose.material3.AlertDialog
 import com.welie.blessed.BluetoothBytesBuilder
 import com.welie.blessed.BluetoothCentralManager
 import com.welie.blessed.BluetoothCentralManagerCallback
@@ -24,7 +25,9 @@ import com.welie.blessed.WriteType.WITH_RESPONSE
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -56,7 +59,7 @@ object BluetoothHandler {
 
     private lateinit var peripheralGlobal: BluetoothPeripheral
 
-    private val bluetoothPeripheralCallback = object : BluetoothPeripheralCallback() {
+    val bluetoothPeripheralCallback = object : BluetoothPeripheralCallback() {
         override fun onServicesDiscovered(peripheral: BluetoothPeripheral) {
             peripheralGlobal = peripheral
             peripheral.requestConnectionPriority(ConnectionPriority.HIGH)
@@ -103,13 +106,19 @@ object BluetoothHandler {
 
     }
 
+    private val connectRequestFlow_ = MutableSharedFlow<BluetoothPeripheral>()
+    val connectRequestFlow = connectRequestFlow_.asSharedFlow()
+
     private val bluetoothCentralManagerCallback = object : BluetoothCentralManagerCallback() {
         override fun onDiscovered(peripheral: BluetoothPeripheral, scanResult: ScanResult) {
             Timber.i("Found peripheral '${peripheral.name}' with RSSI ${scanResult.rssi}")
             centralManager.stopScan()
 
-            println("Not bonding (connecting)...")
-            centralManager.connect(peripheral, bluetoothPeripheralCallback)
+            scope.launch {
+                connectRequestFlow_.emit(peripheral)
+            }
+//            println("Not bonding (connecting)...")
+//            centralManager.connect(peripheral, bluetoothPeripheralCallback)
         }
 
         override fun onConnected(peripheral: BluetoothPeripheral) {
@@ -135,8 +144,8 @@ object BluetoothHandler {
             if (state == BluetoothAdapter.STATE_ON) {
                 // Bluetooth is on now, start scanning again
                 // Scan for peripherals with a certain service UUIDs
-                centralManager.startPairingPopupHack()
-                startScanning()
+//                centralManager.startPairingPopupHack()
+//                startScanning()
             }
         }
     }
@@ -151,11 +160,16 @@ object BluetoothHandler {
         }
     }
 
+    private var initialized = false
+
     fun initialize(context: Context) {
+        if (initialized) return
+        initialized = true
+
         Timber.plant(Timber.DebugTree())
         Timber.i("initializing BluetoothHandler")
 
-        // Start the thread and create our private Handler
+        //  the thread and create our private Handler
         handlerThread.start()
         handler = Handler(handlerThread.looper)
 
