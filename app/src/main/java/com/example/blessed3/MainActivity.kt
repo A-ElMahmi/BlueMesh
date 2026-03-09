@@ -1,8 +1,13 @@
 package com.example.blessed3
 
+import android.app.AlertDialog
 import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothManager
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -17,10 +22,14 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.lifecycleScope
 import com.example.blessed3.ui.theme.Blessed3Theme
+import com.welie.blessed.BluetoothPeripheral
+import kotlinx.coroutines.launch
 import timber.log.Timber
 
 class MainActivity : ComponentActivity() {
+    private val handler = Handler(Looper.getMainLooper())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -34,20 +43,78 @@ class MainActivity : ComponentActivity() {
                         .fillMaxWidth()
                         .fillMaxHeight()) {
 
-                    val measurementText = BluetoothHandler.measurementFlow.collectAsState()
-                    Text(text = measurementText.value, fontSize = 24.sp)
+                    Text(text = "Hi", fontSize = 24.sp)
 
-                    Button(onClick = { BluetoothHandler.send_msg() }) {
-                        Text("Send")
+                    Button(onClick = {
+//                        val bt = BluetoothServer.getInstance(applicationContext)
+//                        bt.initialize()
+//                        handler.postDelayed({bt.startAdvertising()}, 500)
+//                        startAdvertising()
+                        restartScanning()
+
+                    }) {
+                        Text("Scan")
                     }
                 }
             }
         }
+
+        lifecycleScope.launch {
+            BluetoothHandler.connectRequestFlow.collect { peripheral ->
+                showConnectDialog(peripheral)
+            }
+        }
+    }
+
+    private fun showConnectDialog(peripheral: BluetoothPeripheral) {
+        AlertDialog.Builder(this)
+            .setTitle("Device found")
+            .setMessage("Connect to ${peripheral.name}?")
+            .setPositiveButton("Yes") { _, _ ->
+                BluetoothHandler.centralManager.connect(
+                    peripheral,
+                    BluetoothHandler.bluetoothPeripheralCallback
+                )
+            }
+            .setNegativeButton("No", null)
+            .show()
     }
 
     override fun onResume() {
         super.onResume()
-        restartScanning()
+        startAdvertising()
+//        restartScanning()
+    }
+
+    private fun startAdvertising() {
+        println("MainActivity.startAdvertising()...")
+        val bluetoothServer = BluetoothServer.getInstance(applicationContext)
+        val peripheralManager = bluetoothServer.peripheralManager
+
+        if (!peripheralManager.permissionsGranted()) {
+            println("Requesting permission?")
+            requestPermissions()
+            return
+        }
+
+        if (!isBluetoothEnabled) {
+            println("BT not enabled?")
+            enableBleRequest.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
+            return
+        }
+
+        // Make sure we initialize the server only once
+        if (!bluetoothServer.isInitialized) {
+            println("BT Server not init?")
+            bluetoothServer.initialize()
+        }
+
+        println("BTServer init. Now startAdvertising after 500ms")
+
+        // All good now, we can start advertising
+        handler.postDelayed({
+            bluetoothServer.startAdvertising()
+        }, 500)
     }
 
     private fun restartScanning() {
@@ -57,6 +124,7 @@ class MainActivity : ComponentActivity() {
         }
 
         if (BluetoothHandler.centralManager.permissionsGranted()) {
+            println("Calling startScanning()...")
             BluetoothHandler.startScanning()
         } else {
             requestPermissions()
@@ -65,6 +133,7 @@ class MainActivity : ComponentActivity() {
 
     private fun requestPermissions() {
         val missingPermissions = BluetoothHandler.centralManager.getMissingPermissions()
+        println("Any missing permissions? ${missingPermissions.joinToString()}")
         if (missingPermissions.isNotEmpty() && !permissionRequestInProgress) {
             permissionRequestInProgress = true
             blePermissionRequest.launch(missingPermissions)
@@ -74,15 +143,24 @@ class MainActivity : ComponentActivity() {
     private var permissionRequestInProgress = false
     private val blePermissionRequest =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
+            println("Permissions result")
             permissionRequestInProgress = false
             permissions.entries.forEach {
-                Timber.d("${it.key} = ${it.value}")
+                Timber.d("Permission ${it.key} = ${it.value}")
             }
         }
 
     private val enableBleRequest = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        println("enableBleRequest callback")
         if (result.resultCode == RESULT_OK) {
             restartScanning()
         }
     }
+
+    private val isBluetoothEnabled: Boolean
+        get() {
+            val bluetoothManager: BluetoothManager = requireNotNull(applicationContext.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager) { "cannot get BluetoothManager" }
+            val bluetoothAdapter: BluetoothAdapter = requireNotNull(bluetoothManager.adapter) { "no bluetooth adapter found" }
+            return bluetoothAdapter.isEnabled
+        }
 }
