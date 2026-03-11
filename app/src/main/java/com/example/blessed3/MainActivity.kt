@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.sp
@@ -36,6 +37,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             Blessed3Theme {
+                val connectionState by MessagingConnectionState.state.collectAsState(initial = null)
                 Column(
                     verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -44,14 +46,24 @@ class MainActivity : ComponentActivity() {
                         .fillMaxHeight()) {
 
                     Text(text = "Hi", fontSize = 24.sp)
+                    connectionState?.let { connected ->
+                        Text(
+                            text = "Connected to ${connected.displayLabel()} (${connected.role.name})",
+                            fontSize = 14.sp,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
 
                     Button(onClick = {
-//                        val bt = BluetoothServer.getInstance(applicationContext)
-//                        bt.initialize()
-//                        handler.postDelayed({bt.startAdvertising()}, 500)
-//                        startAdvertising()
+                        if (MessagingConnectionState.isConnected) {
+                            android.widget.Toast.makeText(
+                                this@MainActivity,
+                                "Already connected to ${connectionState?.displayLabel()}. Use this connection for messaging.",
+                                android.widget.Toast.LENGTH_LONG
+                            ).show()
+                            return@Button
+                        }
                         restartScanning()
-
                     }) {
                         Text("Scan")
                     }
@@ -67,6 +79,14 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun showConnectDialog(peripheral: BluetoothPeripheral) {
+        if (MessagingConnectionState.isPeer(peripheral.address)) {
+            AlertDialog.Builder(this)
+                .setTitle("Already connected")
+                .setMessage("You are already connected to ${peripheral.name.ifBlank { peripheral.address }}. Use this connection to send and receive messages — no new connection needed.")
+                .setPositiveButton("OK", null)
+                .show()
+            return
+        }
         AlertDialog.Builder(this)
             .setTitle("Device found")
             .setMessage("Connect to ${peripheral.name}?")
@@ -93,7 +113,7 @@ class MainActivity : ComponentActivity() {
 
         if (!peripheralManager.permissionsGranted()) {
             println("Requesting permission?")
-            requestPermissions()
+            requestPermissions2()
             return
         }
 
@@ -128,6 +148,14 @@ class MainActivity : ComponentActivity() {
             BluetoothHandler.startScanning()
         } else {
             requestPermissions()
+        }
+    }
+
+    private fun requestPermissions2() {
+        val missingPermissions = BluetoothServer.getInstance(applicationContext).peripheralManager.getMissingPermissions()
+        if (missingPermissions.isNotEmpty() && !permissionRequestInProgress) {
+            permissionRequestInProgress = true
+            blePermissionRequest.launch(missingPermissions)
         }
     }
 
