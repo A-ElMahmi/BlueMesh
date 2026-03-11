@@ -117,17 +117,17 @@ object BluetoothHandler {
             scope.launch {
                 connectRequestFlow_.emit(peripheral)
             }
-//            println("Not bonding (connecting)...")
-//            centralManager.connect(peripheral, bluetoothPeripheralCallback)
         }
 
         override fun onConnected(peripheral: BluetoothPeripheral) {
             Timber.i("connected to '${peripheral.name}'")
+            MessagingConnectionState.setConnectedAsCentral(peripheral.address, peripheral.name.ifBlank { "" })
             Toast.makeText(context, "Connected to ${peripheral.name}", LENGTH_SHORT).show()
         }
 
         override fun onDisconnected(peripheral: BluetoothPeripheral, status: HciStatus) {
             Timber.i("disconnected '${peripheral.name}'")
+            MessagingConnectionState.clearIfPeer(peripheral.address)
             Toast.makeText(context, "Disconnected ${peripheral.name}", LENGTH_SHORT).show()
             handler.postDelayed(
                 { centralManager.autoConnect(peripheral, bluetoothPeripheralCallback) },

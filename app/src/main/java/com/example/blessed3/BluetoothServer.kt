@@ -73,12 +73,14 @@ class BluetoothServer(private val context: Context) {
         }
 
         override fun onCentralConnected(bluetoothCentral: BluetoothCentral) {
+            MessagingConnectionState.setConnectedAsPeripheral(bluetoothCentral.address, bluetoothCentral.name)
             for (serviceImplementation in serviceImplementations.values) {
                 serviceImplementation.onCentralConnected(bluetoothCentral)
             }
         }
 
         override fun onCentralDisconnected(bluetoothCentral: BluetoothCentral) {
+            MessagingConnectionState.clearIfPeer(bluetoothCentral.address)
             for (serviceImplementation in serviceImplementations.values) {
                 serviceImplementation.onCentralDisconnected(bluetoothCentral)
             }
@@ -146,6 +148,14 @@ class BluetoothServer(private val context: Context) {
     fun send_msg() {
         hrs.notifyHeartRate()
     }
+
+    /** True if we have a central connected with this address (we are peripheral). */
+    fun isCentralConnected(address: String): Boolean =
+        peripheralManager.connectedCentrals.any { it.address.equals(address, ignoreCase = true) }
+
+    /** The single connected central, if we are in peripheral role with one peer. */
+    fun getConnectedCentral(): BluetoothCentral? =
+        peripheralManager.connectedCentrals.firstOrNull()
 
     init {
         Timber.plant(Timber.DebugTree())
