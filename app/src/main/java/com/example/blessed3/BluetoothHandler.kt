@@ -129,10 +129,7 @@ object BluetoothHandler {
             Timber.i("disconnected '${peripheral.name}'")
             MessagingConnectionState.clearIfPeer(peripheral.address)
             Toast.makeText(context, "Disconnected ${peripheral.name}", LENGTH_SHORT).show()
-            handler.postDelayed(
-                { centralManager.autoConnect(peripheral, bluetoothPeripheralCallback) },
-                15000
-            )
+            // Do not autoConnect here; let the user explicitly reconnect.
         }
 
         override fun onConnectionFailed(peripheral: BluetoothPeripheral, status: HciStatus) {

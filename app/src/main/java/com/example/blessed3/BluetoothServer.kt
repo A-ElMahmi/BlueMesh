@@ -80,7 +80,8 @@ class BluetoothServer(private val context: Context) {
         }
 
         override fun onCentralDisconnected(bluetoothCentral: BluetoothCentral) {
-            MessagingConnectionState.clearIfPeer(bluetoothCentral.address)
+            // Any central disconnect ends our single-peer messaging session
+            MessagingConnectionState.clear()
             for (serviceImplementation in serviceImplementations.values) {
                 serviceImplementation.onCentralDisconnected(bluetoothCentral)
             }

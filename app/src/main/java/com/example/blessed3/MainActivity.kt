@@ -91,7 +91,17 @@ class MainActivity : ComponentActivity() {
             .setTitle("Device found")
             .setMessage("Connect to ${peripheral.name}?")
             .setPositiveButton("Yes") { _, _ ->
-                BluetoothHandler.centralManager.connect(
+                val cm = BluetoothHandler.centralManager
+
+                // If blessed still thinks we are connected or connecting to this peripheral,
+                // cancel that first so a fresh connect() can succeed.
+                if (cm.getConnectedPeripherals().any { it.address == peripheral.address } ||
+                    cm.unconnectedPeripherals.containsKey(peripheral.address)
+                ) {
+                    cm.cancelConnection(peripheral)
+                }
+
+                cm.connect(
                     peripheral,
                     BluetoothHandler.bluetoothPeripheralCallback
                 )
