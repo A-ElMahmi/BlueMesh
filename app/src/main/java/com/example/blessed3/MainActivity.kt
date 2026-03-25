@@ -14,14 +14,24 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
 import com.example.blessed3.ui.theme.Blessed3Theme
@@ -38,34 +48,94 @@ class MainActivity : ComponentActivity() {
         setContent {
             Blessed3Theme {
                 val connectionState by MessagingConnectionState.state.collectAsState(initial = null)
+                val isConnected = connectionState != null
+                var messageText by remember { mutableStateOf("") }
+
                 Column(
                     verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .fillMaxHeight()) {
+                        .fillMaxHeight()
+                        .padding(16.dp)
+                ) {
 
-                    Text(text = "Hi", fontSize = 24.sp)
-                    connectionState?.let { connected ->
+                    Text(text = "BLE Messenger", fontSize = 24.sp)
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    if (isConnected) {
                         Text(
-                            text = "Connected to ${connected.displayLabel()} (${connected.role.name})",
-                            fontSize = 14.sp,
-                            modifier = Modifier.fillMaxWidth()
+                            text = "Connected to ${connectionState!!.displayLabel()} (${connectionState!!.role.name})",
+                            fontSize = 14.sp
                         )
+                    } else {
+                        Text(text = "Not connected", fontSize = 14.sp)
                     }
 
-                    Button(onClick = {
-                        if (MessagingConnectionState.isConnected) {
-                            android.widget.Toast.makeText(
-                                this@MainActivity,
-                                "Already connected to ${connectionState?.displayLabel()}. Use this connection for messaging.",
-                                android.widget.Toast.LENGTH_LONG
-                            ).show()
-                            return@Button
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Scan + Disconnect buttons side by side
+                    Row {
+                        Button(
+                            onClick = {
+                                if (isConnected) {
+                                    android.widget.Toast.makeText(
+                                        this@MainActivity,
+                                        "Already connected to ${connectionState?.displayLabel()}.",
+                                        android.widget.Toast.LENGTH_SHORT
+                                    ).show()
+                                    return@Button
+                                }
+                                restartScanning()
+                            }
+                        ) {
+                            Text("Scan")
                         }
-                        restartScanning()
-                    }) {
-                        Text("Scan")
+
+                        Spacer(modifier = Modifier.width(12.dp))
+
+                        Button(
+                            enabled = isConnected,
+                            onClick = {
+                                BleMessaging.disconnect(this@MainActivity)
+                            }
+                        ) {
+                            Text("Disconnect")
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Message input + Send (only meaningful when connected)
+                    OutlinedTextField(
+                        value = messageText,
+                        onValueChange = { messageText = it },
+                        enabled = isConnected,
+                        label = { Text("Message") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Button(
+                        enabled = isConnected,
+                        onClick = {
+                            val text = messageText.trim()
+                            if (text.isEmpty()) {
+                                android.widget.Toast.makeText(
+                                    this@MainActivity,
+                                    "Type a message first",
+                                    android.widget.Toast.LENGTH_SHORT
+                                ).show()
+                                return@Button
+                            }
+                            BleMessaging.send(this@MainActivity, text)
+                            messageText = ""
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Send")
                     }
                 }
             }
