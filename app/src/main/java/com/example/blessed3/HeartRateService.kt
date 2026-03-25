@@ -4,8 +4,6 @@ import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothGattService
 import android.bluetooth.BluetoothGattService.SERVICE_TYPE_PRIMARY
 import android.content.Context
-import android.os.Handler
-import android.os.Looper
 import android.widget.Toast
 import com.welie.blessed.BluetoothCentral
 import com.welie.blessed.BluetoothPeripheralManager
@@ -33,9 +31,6 @@ internal class HeartRateService(peripheralManager: BluetoothPeripheralManager, v
         BluetoothGattCharacteristic.PERMISSION_READ or BluetoothGattCharacteristic.PERMISSION_WRITE,
     )
 
-    private val handler = Handler(Looper.getMainLooper())
-    private val notifyRunnable = Runnable { notifyHeartRate() }
-
     init {
         service.addCharacteristic(measurement)
         measurement.addDescriptor(cccDescriptor)
@@ -50,9 +45,7 @@ internal class HeartRateService(peripheralManager: BluetoothPeripheralManager, v
     }
 
     override fun onNotifyingEnabled(central: BluetoothCentral, characteristic: BluetoothGattCharacteristic) {
-        if (characteristic.uuid == HEARTRATE_MEASUREMENT_CHARACTERISTIC_UUID) {
-            notifyHeartRate()
-        }
+        // Don't send anything automatically; wait for user to type a message
     }
 
     override fun onNotifyingDisabled(central: BluetoothCentral, characteristic: BluetoothGattCharacteristic) {
@@ -73,19 +66,25 @@ internal class HeartRateService(peripheralManager: BluetoothPeripheralManager, v
         characteristic: BluetoothGattCharacteristic,
         value: ByteArray
     ): GattStatus {
-        println("Message arrived: ${value.toString(Charsets.UTF_8)}")
-        Toast.makeText(context, value.toString(Charsets.UTF_8), Toast.LENGTH_SHORT).show()
-
+        val packet = BlePacket.fromBytes(value) ?: return GattStatus.SUCCESS
+        when (packet.type) {
+            BlePacket.TYPE_MSG ->
+                Toast.makeText(context, packet.body, Toast.LENGTH_SHORT).show()
+            BlePacket.TYPE_DISCONNECT -> {
+                MessagingConnectionState.clear()
+                Toast.makeText(context, "Peer disconnected gracefully", Toast.LENGTH_SHORT).show()
+            }
+        }
         return GattStatus.SUCCESS
     }
 
-    fun notifyHeartRate() {
-        notifyCharacteristicChanged("Start notify: ${System.currentTimeMillis()}".toByteArray(), measurement)
-        Timber.i("Notify...")
+    fun sendToCentral(central: BluetoothCentral, bytes: ByteArray) {
+        notifyCharacteristicChanged(bytes, central, measurement)
+        Timber.i("Packet sent to central %s (%d bytes)", central.address, bytes.size)
     }
 
     private fun stopNotifying() {
-        handler.removeCallbacks(notifyRunnable)
+        // nothing to cancel; notifications are only sent on user request
     }
 
     companion object {

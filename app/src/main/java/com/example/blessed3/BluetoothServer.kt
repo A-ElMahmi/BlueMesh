@@ -23,7 +23,8 @@ import java.util.UUID
 @SuppressLint("MissingPermission")
 class BluetoothServer(private val context: Context) {
     var isInitialized = false
-    var peripheralManager: BluetoothPeripheralManager
+    lateinit var peripheralManager: BluetoothPeripheralManager
+    @Volatile private var disconnectAfterNotification = false
     private val bluetoothManager: BluetoothManager
     private val serviceImplementations = HashMap<BluetoothGattService, Service>()
     private val peripheralManagerCallback: BluetoothPeripheralManagerCallback = object : BluetoothPeripheralManagerCallback() {
@@ -68,6 +69,10 @@ class BluetoothServer(private val context: Context) {
         }
 
         override fun onNotificationSent(bluetoothCentral: BluetoothCentral, value: ByteArray, characteristic: BluetoothGattCharacteristic, status: GattStatus) {
+            if (disconnectAfterNotification) {
+                disconnectAfterNotification = false
+                peripheralManager.cancelConnection(bluetoothCentral)
+            }
             val serviceImplementation = serviceImplementations[characteristic.service]
             serviceImplementation?.onNotificationSent(bluetoothCentral, value, characteristic, status)
         }
@@ -146,8 +151,20 @@ class BluetoothServer(private val context: Context) {
         isInitialized = true
     }
 
-    fun send_msg() {
-        hrs.notifyHeartRate()
+    fun sendBytesAndDisconnect(bytes: ByteArray) {
+        disconnectAfterNotification = true
+        sendBytes(bytes)
+    }
+
+    fun sendBytes(bytes: ByteArray) {
+        val central = getConnectedCentral() ?: return
+        hrs.sendToCentral(central, bytes)
+    }
+
+    fun disconnectAsPeripheral() {
+        getConnectedCentral()?.let { central ->
+            peripheralManager.cancelConnection(central)
+        }
     }
 
     /** True if we have a central connected with this address (we are peripheral). */

@@ -26,6 +26,10 @@ internal open class BaseService(peripheralManager: BluetoothPeripheralManager, o
         peripheralManager.notifyCharacteristicChanged(value!!, characteristic)
     }
 
+    protected fun notifyCharacteristicChanged(value: ByteArray, central: BluetoothCentral, characteristic: BluetoothGattCharacteristic) {
+        peripheralManager.notifyCharacteristicChanged(value, central, characteristic)
+    }
+
     fun noCentralsConnected(): Boolean {
         return peripheralManager.connectedCentrals.isEmpty()
     }

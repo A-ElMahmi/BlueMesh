@@ -10,17 +10,13 @@ import android.os.HandlerThread
 import android.os.Process
 import android.widget.Toast
 import android.widget.Toast.LENGTH_SHORT
-import androidx.compose.material3.AlertDialog
-import com.welie.blessed.BluetoothBytesBuilder
 import com.welie.blessed.BluetoothCentralManager
 import com.welie.blessed.BluetoothCentralManagerCallback
 import com.welie.blessed.BluetoothPeripheral
 import com.welie.blessed.BluetoothPeripheralCallback
-import com.welie.blessed.BondState
 import com.welie.blessed.ConnectionPriority
 import com.welie.blessed.GattStatus
 import com.welie.blessed.HciStatus
-import com.welie.blessed.WriteType
 import com.welie.blessed.WriteType.WITH_RESPONSE
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -31,9 +27,6 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import timber.log.Timber
-import java.nio.ByteOrder
-import java.util.Calendar
-import java.util.TimeZone
 import java.util.UUID
 
 
@@ -59,16 +52,20 @@ object BluetoothHandler {
 
     private lateinit var peripheralGlobal: BluetoothPeripheral
 
+    @Volatile private var disconnectAfterWrite = false
+
     val bluetoothPeripheralCallback = object : BluetoothPeripheralCallback() {
         override fun onServicesDiscovered(peripheral: BluetoothPeripheral) {
             peripheralGlobal = peripheral
             peripheral.requestConnectionPriority(ConnectionPriority.HIGH)
-//            peripheral.readCharacteristic(HRS_SERVICE_UUID, NEW_CHARACTERISTIC_UUID)
             peripheral.startNotify(HRS_SERVICE_UUID, HRS_MEASUREMENT_CHARACTERISTIC_UUID)
+        }
 
-
-            peripheral.writeCharacteristic(HRS_SERVICE_UUID, NEW_CHARACTERISTIC_UUID, "Mashallah".toByteArray(),
-                WriteType.WITH_RESPONSE)
+        override fun onCharacteristicWrite(peripheral: BluetoothPeripheral, value: ByteArray, characteristic: BluetoothGattCharacteristic, status: GattStatus) {
+            if (disconnectAfterWrite) {
+                disconnectAfterWrite = false
+                disconnectAsCentral()
+            }
         }
 
         override fun onNotificationStateUpdate(peripheral: BluetoothPeripheral, characteristic: BluetoothGattCharacteristic, status: GattStatus) {
@@ -83,11 +80,17 @@ object BluetoothHandler {
         override fun onCharacteristicUpdate(peripheral: BluetoothPeripheral, value: ByteArray, characteristic: BluetoothGattCharacteristic, status: GattStatus) {
             when (characteristic.uuid) {
                 HRS_MEASUREMENT_CHARACTERISTIC_UUID -> {
-                    scope.launch {
-                        Timber.i(value.toString(Charsets.UTF_8))
-//                        measurementFlow_.emit(value.toString(Charsets.UTF_8))
-                        scope.launch(Dispatchers.Main) {
-                            Toast.makeText(context, value.toString(Charsets.UTF_8), Toast.LENGTH_SHORT).show()
+                    val packet = BlePacket.fromBytes(value) ?: return
+                    when (packet.type) {
+                        BlePacket.TYPE_MSG ->
+                            scope.launch(Dispatchers.Main) {
+                                Toast.makeText(context, packet.body, Toast.LENGTH_SHORT).show()
+                            }
+                        BlePacket.TYPE_DISCONNECT -> {
+                            MessagingConnectionState.clear()
+                            scope.launch(Dispatchers.Main) {
+                                Toast.makeText(context, "Peer disconnected gracefully", Toast.LENGTH_SHORT).show()
+                            }
                         }
                     }
                 }
@@ -101,9 +104,30 @@ object BluetoothHandler {
 
     }
 
-    fun send_msg() {
-        peripheralGlobal.writeCharacteristic(HRS_SERVICE_UUID, NEW_CHARACTERISTIC_UUID, "Sent".toByteArray(), WITH_RESPONSE)
+    fun sendBytesAndDisconnect(bytes: ByteArray) {
+        disconnectAfterWrite = true
+        sendBytes(bytes)
+    }
 
+    fun sendBytes(bytes: ByteArray) {
+        val peer = MessagingConnectionState.currentPeer ?: return
+        val peripheral = centralManager.getConnectedPeripherals().find {
+            it.address.equals(peer.peerAddress, ignoreCase = true)
+        } ?: return
+        peripheral.writeCharacteristic(
+            HRS_SERVICE_UUID,
+            NEW_CHARACTERISTIC_UUID,
+            bytes,
+            WITH_RESPONSE
+        )
+    }
+
+    fun disconnectAsCentral() {
+        val peer = MessagingConnectionState.currentPeer ?: return
+        val peripheral = centralManager.getConnectedPeripherals().find {
+            it.address.equals(peer.peerAddress, ignoreCase = true)
+        } ?: return
+        centralManager.cancelConnection(peripheral)
     }
 
     private val connectRequestFlow_ = MutableSharedFlow<BluetoothPeripheral>()
