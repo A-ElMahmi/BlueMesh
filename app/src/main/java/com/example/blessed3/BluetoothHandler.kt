@@ -5,11 +5,10 @@ import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.le.ScanResult
 import android.content.Context
+import android.util.Log
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.Process
-import android.widget.Toast
-import android.widget.Toast.LENGTH_SHORT
 import com.welie.blessed.BluetoothCentralManager
 import com.welie.blessed.BluetoothCentralManagerCallback
 import com.welie.blessed.BluetoothPeripheral
@@ -21,11 +20,8 @@ import com.welie.blessed.WriteType.WITH_RESPONSE
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.util.UUID
 
@@ -42,9 +38,12 @@ object BluetoothHandler {
 
     lateinit var centralManager: BluetoothCentralManager
 
-    private val measurementFlow_ = MutableStateFlow("Waiting for measurement")
-    val measurementFlow = measurementFlow_.asStateFlow()
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+    private val _scannedDevices = MutableStateFlow<List<BluetoothPeripheral>>(emptyList())
+    val scannedDevices = _scannedDevices.asStateFlow()
+
+    fun clearScannedDevices() { _scannedDevices.value = emptyList() }
 
     private val HRS_SERVICE_UUID: UUID = UUID.fromString("0000180D-0000-1000-8000-00805f9b34fb")
     private val HRS_MEASUREMENT_CHARACTERISTIC_UUID: UUID = UUID.fromString("00002A37-0000-1000-8000-00805f9b34fb")
@@ -58,6 +57,7 @@ object BluetoothHandler {
         override fun onServicesDiscovered(peripheral: BluetoothPeripheral) {
             peripheralGlobal = peripheral
             peripheral.requestConnectionPriority(ConnectionPriority.HIGH)
+            peripheral.requestMtu(512)
             peripheral.startNotify(HRS_SERVICE_UUID, HRS_MEASUREMENT_CHARACTERISTIC_UUID)
         }
 
@@ -80,17 +80,18 @@ object BluetoothHandler {
         override fun onCharacteristicUpdate(peripheral: BluetoothPeripheral, value: ByteArray, characteristic: BluetoothGattCharacteristic, status: GattStatus) {
             when (characteristic.uuid) {
                 HRS_MEASUREMENT_CHARACTERISTIC_UUID -> {
-                    val packet = BlePacket.fromBytes(value) ?: return
+                    Log.d("BleMsg", "CENTRAL recv ${value.size} bytes from ${peripheral.address}")
+                    val packet = BlePacket.fromBytes(value) ?: run {
+                        Log.d("BleMsg", "CENTRAL recv: failed to parse packet")
+                        return
+                    }
+                    Log.d("BleMsg", "CENTRAL recv type=${packet.type} body=\"${packet.body}\"")
                     when (packet.type) {
                         BlePacket.TYPE_MSG ->
-                            scope.launch(Dispatchers.Main) {
-                                Toast.makeText(context, packet.body, Toast.LENGTH_SHORT).show()
-                            }
+                            MessageBus.add(ChatMessage(packet.body, isFromMe = false))
                         BlePacket.TYPE_DISCONNECT -> {
                             MessagingConnectionState.clear()
-                            scope.launch(Dispatchers.Main) {
-                                Toast.makeText(context, "Peer disconnected gracefully", Toast.LENGTH_SHORT).show()
-                            }
+                            MessageBus.clear()
                         }
                     }
                 }
@@ -130,30 +131,24 @@ object BluetoothHandler {
         centralManager.cancelConnection(peripheral)
     }
 
-    private val connectRequestFlow_ = MutableSharedFlow<BluetoothPeripheral>()
-    val connectRequestFlow = connectRequestFlow_.asSharedFlow()
-
     private val bluetoothCentralManagerCallback = object : BluetoothCentralManagerCallback() {
         override fun onDiscovered(peripheral: BluetoothPeripheral, scanResult: ScanResult) {
             Timber.i("Found peripheral '${peripheral.name}' with RSSI ${scanResult.rssi}")
-            centralManager.stopScan()
-
-            scope.launch {
-                connectRequestFlow_.emit(peripheral)
+            val current = _scannedDevices.value
+            if (current.none { it.address == peripheral.address }) {
+                _scannedDevices.value = current + peripheral
             }
         }
 
         override fun onConnected(peripheral: BluetoothPeripheral) {
             Timber.i("connected to '${peripheral.name}'")
             MessagingConnectionState.setConnectedAsCentral(peripheral.address, peripheral.name.ifBlank { "" })
-            Toast.makeText(context, "Connected to ${peripheral.name}", LENGTH_SHORT).show()
         }
 
         override fun onDisconnected(peripheral: BluetoothPeripheral, status: HciStatus) {
             Timber.i("disconnected '${peripheral.name}'")
             MessagingConnectionState.clearIfPeer(peripheral.address)
-            Toast.makeText(context, "Disconnected ${peripheral.name}", LENGTH_SHORT).show()
-            // Do not autoConnect here; let the user explicitly reconnect.
+            MessageBus.clear()
         }
 
         override fun onConnectionFailed(peripheral: BluetoothPeripheral, status: HciStatus) {
