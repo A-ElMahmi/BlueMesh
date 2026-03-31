@@ -1,6 +1,5 @@
 package com.example.blessed3
 
-import android.app.AlertDialog
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
 import android.content.Context
@@ -12,18 +11,30 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -33,10 +44,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.lifecycleScope
 import com.example.blessed3.ui.theme.Blessed3Theme
 import com.welie.blessed.BluetoothPeripheral
-import kotlinx.coroutines.launch
 import timber.log.Timber
 
 class MainActivity : ComponentActivity() {
@@ -44,177 +53,189 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+//        enableEdgeToEdge()
         setContent {
             Blessed3Theme {
                 val connectionState by MessagingConnectionState.state.collectAsState(initial = null)
-                val isConnected = connectionState != null
-                var messageText by remember { mutableStateOf("") }
 
-                Column(
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .fillMaxHeight()
-                        .padding(16.dp)
-                ) {
-
-                    Text(text = "BLE Messenger", fontSize = 24.sp)
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    if (isConnected) {
-                        Text(
-                            text = "Connected to ${connectionState!!.displayLabel()} (${connectionState!!.role.name})",
-                            fontSize = 14.sp
-                        )
-                    } else {
-                        Text(text = "Not connected", fontSize = 14.sp)
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // Scan + Disconnect buttons side by side
-                    Row {
-                        Button(
-                            onClick = {
-                                if (isConnected) {
-                                    android.widget.Toast.makeText(
-                                        this@MainActivity,
-                                        "Already connected to ${connectionState?.displayLabel()}.",
-                                        android.widget.Toast.LENGTH_SHORT
-                                    ).show()
-                                    return@Button
-                                }
-                                restartScanning()
-                            }
-                        ) {
-                            Text("Scan")
-                        }
-
-                        Spacer(modifier = Modifier.width(12.dp))
-
-                        Button(
-                            enabled = isConnected,
-                            onClick = {
-                                BleMessaging.disconnect(this@MainActivity)
-                            }
-                        ) {
-                            Text("Disconnect")
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // Message input + Send (only meaningful when connected)
-                    OutlinedTextField(
-                        value = messageText,
-                        onValueChange = { messageText = it },
-                        enabled = isConnected,
-                        label = { Text("Message") },
-                        modifier = Modifier.fillMaxWidth()
+                if (connectionState == null) {
+                    DeviceListScreen(
+                        onScanClick = { restartScanning() },
+                        onConnectConfirmed = { peripheral -> connectToPeripheral(peripheral) }
                     )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Button(
-                        enabled = isConnected,
-                        onClick = {
-                            val text = messageText.trim()
-                            if (text.isEmpty()) {
-                                android.widget.Toast.makeText(
-                                    this@MainActivity,
-                                    "Type a message first",
-                                    android.widget.Toast.LENGTH_SHORT
-                                ).show()
-                                return@Button
-                            }
-                            BleMessaging.send(this@MainActivity, text)
-                            messageText = ""
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Send")
-                    }
+                } else {
+                    ChatScreen(
+                        peerLabel = connectionState!!.displayLabel(),
+                        onDisconnect = { BleMessaging.disconnect(this@MainActivity) }
+                    )
                 }
-            }
-        }
-
-        lifecycleScope.launch {
-            BluetoothHandler.connectRequestFlow.collect { peripheral ->
-                showConnectDialog(peripheral)
             }
         }
     }
 
-    private fun showConnectDialog(peripheral: BluetoothPeripheral) {
-        if (MessagingConnectionState.isPeer(peripheral.address)) {
-            AlertDialog.Builder(this)
-                .setTitle("Already connected")
-                .setMessage("You are already connected to ${peripheral.name.ifBlank { peripheral.address }}. Use this connection to send and receive messages — no new connection needed.")
-                .setPositiveButton("OK", null)
-                .show()
-            return
-        }
-        AlertDialog.Builder(this)
-            .setTitle("Device found")
-            .setMessage("Connect to ${peripheral.name}?")
-            .setPositiveButton("Yes") { _, _ ->
-                val cm = BluetoothHandler.centralManager
+    // ── Device List Screen ─────────────────────────────────────────────────────
 
-                // If blessed still thinks we are connected or connecting to this peripheral,
-                // cancel that first so a fresh connect() can succeed.
-                if (cm.getConnectedPeripherals().any { it.address == peripheral.address } ||
-                    cm.unconnectedPeripherals.containsKey(peripheral.address)
-                ) {
-                    cm.cancelConnection(peripheral)
-                }
+    @Composable
+    fun DeviceListScreen(
+        onScanClick: () -> Unit,
+        onConnectConfirmed: (BluetoothPeripheral) -> Unit
+    ) {
+        val devices by BluetoothHandler.scannedDevices.collectAsState()
+        var pendingDevice by remember { mutableStateOf<BluetoothPeripheral?>(null) }
 
-                cm.connect(
-                    peripheral,
-                    BluetoothHandler.bluetoothPeripheralCallback
-                )
+        Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+            Text("BLE Messenger", fontSize = 22.sp)
+            Spacer(modifier = Modifier.height(8.dp))
+            Button(onClick = onScanClick, modifier = Modifier.fillMaxWidth()) {
+                Text("Scan")
             }
-            .setNegativeButton("No", null)
-            .show()
+            Spacer(modifier = Modifier.height(8.dp))
+            Text("Found devices (${devices.size}):", fontSize = 14.sp)
+            Spacer(modifier = Modifier.height(4.dp))
+
+            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                items(devices, key = { it.address }) { peripheral ->
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { pendingDevice = peripheral }
+                            .padding(vertical = 12.dp, horizontal = 4.dp)
+                    ) {
+                        Text(peripheral.name.ifBlank { "Unknown" }, fontSize = 16.sp)
+                        Text(peripheral.address, fontSize = 12.sp)
+                    }
+                    HorizontalDivider()
+                }
+            }
+        }
+
+        // Confirm-connect dialog
+        pendingDevice?.let { peripheral ->
+            AlertDialog(
+                onDismissRequest = { pendingDevice = null },
+                title = { Text("Connect?") },
+                text = { Text("Connect to ${peripheral.name.ifBlank { peripheral.address }}?") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        pendingDevice = null
+                        onConnectConfirmed(peripheral)
+                    }) { Text("Yes") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { pendingDevice = null }) { Text("No") }
+                }
+            )
+        }
+    }
+
+    // ── Chat Screen ────────────────────────────────────────────────────────────
+
+    @Composable
+    fun ChatScreen(peerLabel: String, onDisconnect: () -> Unit) {
+        val messages by MessageBus.messages.collectAsState()
+        var messageText by remember { mutableStateOf("") }
+        val listState = rememberLazyListState()
+
+        // Scroll to bottom whenever a new message arrives
+        LaunchedEffect(messages.size) {
+            if (messages.isNotEmpty()) listState.animateScrollToItem(messages.size - 1)
+        }
+
+        Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+            // Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Chat with $peerLabel", fontSize = 16.sp)
+                Button(onClick = onDisconnect) { Text("Disconnect") }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Message list
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.weight(1f).fillMaxWidth()
+            ) {
+                items(messages) { msg ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        contentAlignment = if (msg.isFromMe) Alignment.CenterEnd else Alignment.CenterStart
+                    ) {
+                        Text(
+                            text = msg.text,
+                            fontSize = 15.sp,
+                            modifier = Modifier
+                                .widthIn(max = 280.dp)
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Input row
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(
+                    value = messageText,
+                    onValueChange = { messageText = it },
+                    label = { Text("Message") },
+                    modifier = Modifier.weight(1f)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Button(onClick = {
+                    val text = messageText.trim()
+                    if (text.isNotEmpty()) {
+                        BleMessaging.send(this@MainActivity, text)
+                        messageText = ""
+                    }
+                }) {
+                    Text("Send")
+                }
+            }
+        }
+    }
+
+    // ── BLE helpers ────────────────────────────────────────────────────────────
+
+    private fun connectToPeripheral(peripheral: BluetoothPeripheral) {
+        BluetoothHandler.clearScannedDevices()
+        val cm = BluetoothHandler.centralManager
+        cm.stopScan()
+        if (cm.getConnectedPeripherals().any { it.address == peripheral.address } ||
+            cm.unconnectedPeripherals.containsKey(peripheral.address)
+        ) {
+            cm.cancelConnection(peripheral)
+        }
+        cm.connect(peripheral, BluetoothHandler.bluetoothPeripheralCallback)
     }
 
     override fun onResume() {
         super.onResume()
         startAdvertising()
-//        restartScanning()
     }
 
     private fun startAdvertising() {
-        println("MainActivity.startAdvertising()...")
         val bluetoothServer = BluetoothServer.getInstance(applicationContext)
         val peripheralManager = bluetoothServer.peripheralManager
 
         if (!peripheralManager.permissionsGranted()) {
-            println("Requesting permission?")
             requestPermissions2()
             return
         }
-
         if (!isBluetoothEnabled) {
-            println("BT not enabled?")
             enableBleRequest.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
             return
         }
-
-        // Make sure we initialize the server only once
         if (!bluetoothServer.isInitialized) {
-            println("BT Server not init?")
             bluetoothServer.initialize()
         }
-
-        println("BTServer init. Now startAdvertising after 500ms")
-
-        // All good now, we can start advertising
-        handler.postDelayed({
-            bluetoothServer.startAdvertising()
-        }, 500)
+        handler.postDelayed({ bluetoothServer.startAdvertising() }, 500)
     }
 
     private fun restartScanning() {
@@ -222,9 +243,8 @@ class MainActivity : ComponentActivity() {
             enableBleRequest.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
             return
         }
-
         if (BluetoothHandler.centralManager.permissionsGranted()) {
-            println("Calling startScanning()...")
+            BluetoothHandler.clearScannedDevices()
             BluetoothHandler.startScanning()
         } else {
             requestPermissions()
@@ -232,43 +252,36 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun requestPermissions2() {
-        val missingPermissions = BluetoothServer.getInstance(applicationContext).peripheralManager.getMissingPermissions()
-        if (missingPermissions.isNotEmpty() && !permissionRequestInProgress) {
+        val missing = BluetoothServer.getInstance(applicationContext).peripheralManager.getMissingPermissions()
+        if (missing.isNotEmpty() && !permissionRequestInProgress) {
             permissionRequestInProgress = true
-            blePermissionRequest.launch(missingPermissions)
+            blePermissionRequest.launch(missing)
         }
     }
 
     private fun requestPermissions() {
-        val missingPermissions = BluetoothHandler.centralManager.getMissingPermissions()
-        println("Any missing permissions? ${missingPermissions.joinToString()}")
-        if (missingPermissions.isNotEmpty() && !permissionRequestInProgress) {
+        val missing = BluetoothHandler.centralManager.getMissingPermissions()
+        if (missing.isNotEmpty() && !permissionRequestInProgress) {
             permissionRequestInProgress = true
-            blePermissionRequest.launch(missingPermissions)
+            blePermissionRequest.launch(missing)
         }
     }
 
     private var permissionRequestInProgress = false
     private val blePermissionRequest =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
-            println("Permissions result")
             permissionRequestInProgress = false
-            permissions.entries.forEach {
-                Timber.d("Permission ${it.key} = ${it.value}")
-            }
+            permissions.entries.forEach { Timber.d("Permission ${it.key} = ${it.value}") }
         }
 
-    private val enableBleRequest = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        println("enableBleRequest callback")
-        if (result.resultCode == RESULT_OK) {
-            restartScanning()
+    private val enableBleRequest =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == RESULT_OK) restartScanning()
         }
-    }
 
     private val isBluetoothEnabled: Boolean
         get() {
-            val bluetoothManager: BluetoothManager = requireNotNull(applicationContext.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager) { "cannot get BluetoothManager" }
-            val bluetoothAdapter: BluetoothAdapter = requireNotNull(bluetoothManager.adapter) { "no bluetooth adapter found" }
-            return bluetoothAdapter.isEnabled
+            val btManager = requireNotNull(applicationContext.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager)
+            return requireNotNull(btManager.adapter).isEnabled
         }
 }

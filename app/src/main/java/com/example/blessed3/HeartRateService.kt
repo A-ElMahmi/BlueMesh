@@ -4,11 +4,11 @@ import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothGattService
 import android.bluetooth.BluetoothGattService.SERVICE_TYPE_PRIMARY
 import android.content.Context
-import android.widget.Toast
 import com.welie.blessed.BluetoothCentral
 import com.welie.blessed.BluetoothPeripheralManager
 import com.welie.blessed.GattStatus
 import com.welie.blessed.ReadResponse
+import android.util.Log
 import timber.log.Timber
 import java.util.UUID
 
@@ -66,13 +66,17 @@ internal class HeartRateService(peripheralManager: BluetoothPeripheralManager, v
         characteristic: BluetoothGattCharacteristic,
         value: ByteArray
     ): GattStatus {
-        val packet = BlePacket.fromBytes(value) ?: return GattStatus.SUCCESS
+        val packet = BlePacket.fromBytes(value) ?: run {
+            Log.d("BleMsg", "PERIPHERAL recv: failed to parse packet (${value.size} bytes)")
+            return GattStatus.SUCCESS
+        }
+        Log.d("BleMsg", "PERIPHERAL recv type=${packet.type} body=\"${packet.body}\"")
         when (packet.type) {
             BlePacket.TYPE_MSG ->
-                Toast.makeText(context, packet.body, Toast.LENGTH_SHORT).show()
+                MessageBus.add(ChatMessage(packet.body, isFromMe = false))
             BlePacket.TYPE_DISCONNECT -> {
                 MessagingConnectionState.clear()
-                Toast.makeText(context, "Peer disconnected gracefully", Toast.LENGTH_SHORT).show()
+                MessageBus.clear()
             }
         }
         return GattStatus.SUCCESS
