@@ -20,8 +20,10 @@ import com.welie.blessed.WriteType.WITH_RESPONSE
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.util.UUID
 
@@ -108,6 +110,15 @@ object BluetoothHandler {
     fun sendBytesAndDisconnect(bytes: ByteArray) {
         disconnectAfterWrite = true
         sendBytes(bytes)
+        // Fallback: if onCharacteristicWrite never fires (connection already gone), force-clear after 5s
+        scope.launch {
+            delay(5_000)
+            if (disconnectAfterWrite) {
+                disconnectAfterWrite = false
+                MessagingConnectionState.clear()
+                MessageBus.clear()
+            }
+        }
     }
 
     fun sendBytes(bytes: ByteArray) {

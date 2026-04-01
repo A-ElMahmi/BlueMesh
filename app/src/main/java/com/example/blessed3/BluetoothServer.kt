@@ -10,6 +10,8 @@ import android.bluetooth.le.AdvertiseData
 import android.bluetooth.le.AdvertiseSettings
 import android.content.Context
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.ParcelUuid
 import com.welie.blessed.AdvertiseError
 import com.welie.blessed.BluetoothCentral
@@ -155,6 +157,15 @@ class BluetoothServer(private val context: Context) {
     fun sendBytesAndDisconnect(bytes: ByteArray) {
         disconnectAfterNotification = true
         sendBytes(bytes)
+        // Fallback: if onNotificationSent never fires (connection already gone), force-clear after 5s
+        Handler(Looper.getMainLooper()).postDelayed({
+            if (disconnectAfterNotification) {
+                disconnectAfterNotification = false
+                MessagingConnectionState.clear()
+                MessageBus.clear()
+                getConnectedCentral()?.let { peripheralManager.cancelConnection(it) }
+            }
+        }, 5_000)
     }
 
     fun sendBytes(bytes: ByteArray) {
