@@ -74,6 +74,22 @@ internal class HeartRateService(peripheralManager: BluetoothPeripheralManager, v
         when (packet.type) {
             BlePacket.TYPE_MSG ->
                 MessageBus.add(ChatMessage(packet.body, isFromMe = false))
+            BlePacket.TYPE_HANDSHAKE -> {
+                val centralAppId = packet.body
+                if (centralAppId.isNotEmpty()) {
+                    MessagingConnectionState.updatePeerAppId(centralAppId)
+                    val peer = MessagingConnectionState.currentPeer
+                    if (peer != null) {
+                        KnownPeers.save(
+                            KnownPeer(
+                                appId = centralAppId,
+                                displayName = peer.displayLabel(),
+                                lastSeenMs = System.currentTimeMillis()
+                            )
+                        )
+                    }
+                }
+            }
             BlePacket.TYPE_DISCONNECT -> {
                 MessagingConnectionState.clear()
                 MessageBus.clear()

@@ -46,6 +46,20 @@ class ChatActivity : ComponentActivity() {
                     if (connectionState == null) finish()
                 }
 
+                // Save peer as soon as we have their stable appId.
+                // For WE_ARE_CENTRAL: available immediately from the scan result.
+                // For WE_ARE_PERIPHERAL: set after the handshake packet arrives.
+                LaunchedEffect(connectionState?.peerAppId) {
+                    val appId = connectionState?.peerAppId ?: return@LaunchedEffect
+                    KnownPeers.save(
+                        KnownPeer(
+                            appId = appId,
+                            displayName = connectionState!!.displayLabel(),
+                            lastSeenMs = System.currentTimeMillis()
+                        )
+                    )
+                }
+
                 connectionState?.let { state ->
                     ChatScreen(
                         peerLabel = state.displayLabel(),

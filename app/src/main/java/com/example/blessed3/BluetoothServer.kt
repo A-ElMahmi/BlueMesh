@@ -123,6 +123,7 @@ class BluetoothServer(private val context: Context) {
             .build()
         val scanResponse = AdvertiseData.Builder()
             .setIncludeTxPowerLevel(true)
+            .addServiceData(ParcelUuid(serviceUUID), DeviceIdentity.appIdBytes)
             .build()
         peripheralManager.startAdvertising(advertiseSettings, advertiseData, scanResponse)
     }
