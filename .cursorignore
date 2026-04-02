@@ -1,0 +1,11 @@
+# Exclude Android build artifacts from Cursor indexing
+build/
+app/build/
+.gradle/
+.idea/
+**/*.jar
+**/*.aar
+**/*.apk
+**/intermediates/
+**/generated/
+**/.cxx/

@@ -11,9 +11,8 @@ import kotlinx.coroutines.flow.StateFlow
  * - Either we are CENTRAL (we connected to them) → we send via write, receive via notify
  * - Or we are PERIPHERAL (they connected to us) → we send via notify, receive via write
  *
- * Device identity uses Bluetooth MAC address (normalized uppercase) so we can
- * detect "already connected" when the user on the peripheral side tries to scan:
- * the device they see is the same central already connected to us.
+ * peerAppId is the stable 8-byte hex identity from the peer's advertisement/handshake.
+ * It is null until we receive it (peripheral side gets it from the handshake packet).
  */
 object MessagingConnectionState {
 
@@ -27,7 +26,8 @@ object MessagingConnectionState {
     data class Connected(
         val peerAddress: String,
         val peerName: String,
-        val role: Role
+        val role: Role,
+        val peerAppId: String? = null
     ) {
         fun displayLabel(): String = peerName.ifBlank { peerAddress }
     }
@@ -51,20 +51,27 @@ object MessagingConnectionState {
         return _state.value?.peerAddress == a
     }
 
-    fun setConnectedAsCentral(peerAddress: String, peerName: String) {
+    fun setConnectedAsCentral(peerAddress: String, peerName: String, peerAppId: String? = null) {
         _state.value = Connected(
             peerAddress = normalizeAddress(peerAddress) ?: peerAddress,
             peerName = peerName,
-            role = Role.WE_ARE_CENTRAL
+            role = Role.WE_ARE_CENTRAL,
+            peerAppId = peerAppId
         )
     }
 
-    fun setConnectedAsPeripheral(centralAddress: String, centralName: String) {
+    fun setConnectedAsPeripheral(centralAddress: String, centralName: String, peerAppId: String? = null) {
         _state.value = Connected(
             peerAddress = normalizeAddress(centralAddress) ?: centralAddress,
             peerName = centralName,
-            role = Role.WE_ARE_PERIPHERAL
+            role = Role.WE_ARE_PERIPHERAL,
+            peerAppId = peerAppId
         )
+    }
+
+    /** Called when the peripheral receives the central's handshake packet with their appId. */
+    fun updatePeerAppId(appId: String) {
+        _state.value = _state.value?.copy(peerAppId = appId)
     }
 
     fun clearIfPeer(address: String?) {

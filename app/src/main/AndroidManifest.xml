@@ -44,6 +44,9 @@
         <activity
             android:name=".ChatActivity"
             android:theme="@style/Theme.Blessed3" />
+        <activity
+            android:name=".DiscoverActivity"
+            android:theme="@style/Theme.Blessed3" />
     </application>
 
 </manifest>

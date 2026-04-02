@@ -7,11 +7,15 @@ import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -21,6 +25,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -28,18 +33,22 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.blessed3.ui.theme.Blessed3Theme
 import com.welie.blessed.BluetoothPeripheral
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import timber.log.Timber
 
 class MainActivity : ComponentActivity() {
     private val handler = Handler(Looper.getMainLooper())
+
+    // Scan-for-peer UI state kept as Activity-level flows so we can reset on pause.
+    private val _scanningPeer = MutableStateFlow<KnownPeer?>(null)
+    private val _pendingConnection = MutableStateFlow<Pair<KnownPeer, BluetoothPeripheral>?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -53,65 +62,120 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                DeviceListScreen(
-                    onScanClick = { restartScanning() },
-                    onConnectConfirmed = { peripheral -> connectToPeripheral(peripheral) }
-                )
+                ChatsScreen()
             }
         }
     }
 
-    // ── Device List Screen ─────────────────────────────────────────────────────
+    // ── Chats Screen ───────────────────────────────────────────────────────────
 
     @Composable
-    fun DeviceListScreen(
-        onScanClick: () -> Unit,
-        onConnectConfirmed: (BluetoothPeripheral) -> Unit
-    ) {
-        val devices by BluetoothHandler.scannedDevices.collectAsState()
-        var pendingDevice by remember { mutableStateOf<BluetoothPeripheral?>(null) }
+    private fun ChatsScreen() {
+        val peers by KnownPeers.peersFlow.collectAsState()
+        val scanningPeer by _scanningPeer.asStateFlow().collectAsState()
+        val pendingConnection by _pendingConnection.asStateFlow().collectAsState()
 
-        Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-            Text("BLE Messenger", fontSize = 22.sp)
-            Spacer(modifier = Modifier.height(8.dp))
-            Button(onClick = onScanClick, modifier = Modifier.fillMaxWidth()) {
-                Text("Scan")
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Chats", fontSize = 26.sp)
+                Button(onClick = {
+                    startActivity(Intent(this@MainActivity, DiscoverActivity::class.java))
+                }) {
+                    Text("Discover")
+                }
             }
-            Spacer(modifier = Modifier.height(8.dp))
-            Text("Found devices (${devices.size}):", fontSize = 14.sp)
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
-                items(devices, key = { it.address }) { peripheral ->
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { pendingDevice = peripheral }
-                            .padding(vertical = 12.dp, horizontal = 4.dp)
-                    ) {
-                        Text(peripheral.name.ifBlank { "Unknown" }, fontSize = 16.sp)
-                        Text(peripheral.address, fontSize = 12.sp)
+            if (peers.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("No contacts yet", fontSize = 16.sp)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("Tap Discover to find nearby devices", fontSize = 13.sp)
                     }
-                    HorizontalDivider()
+                }
+            } else {
+                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    items(peers, key = { it.appId }) { peer ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(enabled = scanningPeer == null) {
+                                    startScanForPeer(peer)
+                                }
+                                .padding(vertical = 14.dp, horizontal = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(peer.displayName, fontSize = 17.sp)
+                                Text(
+                                    text = formatLastSeen(peer.lastSeenMs),
+                                    fontSize = 12.sp
+                                )
+                            }
+                            if (scanningPeer?.appId == peer.appId) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.padding(end = 4.dp),
+                                    strokeWidth = 2.dp
+                                )
+                            }
+                        }
+                        HorizontalDivider()
+                    }
                 }
             }
         }
 
-        pendingDevice?.let { peripheral ->
+        // Confirm dialog once the targeted scan finds the peer
+        pendingConnection?.let { (peer, peripheral) ->
             AlertDialog(
-                onDismissRequest = { pendingDevice = null },
+                onDismissRequest = { _pendingConnection.value = null },
                 title = { Text("Connect?") },
-                text = { Text("Connect to ${peripheral.name.ifBlank { peripheral.address }}?") },
+                text = { Text("Connect to ${peer.displayName}?") },
                 confirmButton = {
                     TextButton(onClick = {
-                        pendingDevice = null
-                        onConnectConfirmed(peripheral)
+                        _pendingConnection.value = null
+                        connectToPeripheral(peripheral)
                     }) { Text("Yes") }
                 },
                 dismissButton = {
-                    TextButton(onClick = { pendingDevice = null }) { Text("No") }
+                    TextButton(onClick = { _pendingConnection.value = null }) { Text("No") }
                 }
             )
+        }
+    }
+
+    private fun startScanForPeer(peer: KnownPeer) {
+        _scanningPeer.value = peer
+        BluetoothHandler.scanForPeer(
+            appId = peer.appId,
+            onFound = { peripheral ->
+                _scanningPeer.value = null
+                _pendingConnection.value = Pair(peer, peripheral)
+            },
+            onNotFound = {
+                _scanningPeer.value = null
+                Toast.makeText(this, "${peer.displayName} is out of range", Toast.LENGTH_SHORT).show()
+            }
+        )
+    }
+
+    private fun formatLastSeen(ms: Long): String {
+        val diff = System.currentTimeMillis() - ms
+        return when {
+            diff < 60_000L -> "just now"
+            diff < 3_600_000L -> "${diff / 60_000}m ago"
+            diff < 86_400_000L -> "${diff / 3_600_000}h ago"
+            else -> "${diff / 86_400_000}d ago"
         }
     }
 
@@ -134,6 +198,14 @@ class MainActivity : ComponentActivity() {
         startAdvertising()
     }
 
+    override fun onPause() {
+        super.onPause()
+        // Cancel any in-progress targeted scan so it doesn't surface stale results later.
+        BluetoothHandler.cancelScanForPeer()
+        _scanningPeer.value = null
+        _pendingConnection.value = null
+    }
+
     private fun startAdvertising() {
         val bluetoothServer = BluetoothServer.getInstance(applicationContext)
         val peripheralManager = bluetoothServer.peripheralManager
@@ -151,19 +223,6 @@ class MainActivity : ComponentActivity() {
         }
         if (!peripheralManager.isAdvertising) {
             handler.postDelayed({ bluetoothServer.startAdvertising() }, 500)
-        }
-    }
-
-    private fun restartScanning() {
-        if (!BluetoothHandler.centralManager.isBluetoothEnabled) {
-            enableBleRequest.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
-            return
-        }
-        if (BluetoothHandler.centralManager.permissionsGranted()) {
-            BluetoothHandler.clearScannedDevices()
-            BluetoothHandler.startScanning()
-        } else {
-            requestPermissions()
         }
     }
 
@@ -192,7 +251,10 @@ class MainActivity : ComponentActivity() {
 
     private val enableBleRequest =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-            if (result.resultCode == RESULT_OK) restartScanning()
+            if (result.resultCode == RESULT_OK) {
+                // Bluetooth just got enabled; re-attempt advertising
+                startAdvertising()
+            }
         }
 
     private val isBluetoothEnabled: Boolean
