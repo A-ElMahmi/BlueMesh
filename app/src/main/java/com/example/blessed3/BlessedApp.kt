@@ -8,5 +8,6 @@ class BlessedApp : Application() {
         DeviceIdentity.initialize(applicationContext)
         KnownPeers.initialize(applicationContext)
         BluetoothHandler.initialize(applicationContext)
+        RelayManager.initialize(applicationContext)
     }
 }

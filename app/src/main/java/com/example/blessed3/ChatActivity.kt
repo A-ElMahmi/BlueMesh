@@ -33,16 +33,22 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.blessed3.ui.theme.Blessed3Theme
+import timber.log.Timber
 
 class ChatActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Timber.d("NAVDBG ChatActivity.onCreate taskId=$taskId instance=${System.identityHashCode(this)}")
         setContent {
             Blessed3Theme {
                 val connectionState by MessagingConnectionState.state.collectAsState()
 
                 LaunchedEffect(connectionState) {
+                    Timber.d(
+                        "NAVDBG ChatActivity.LaunchedEffect connectionState role=${connectionState?.role} " +
+                            "peerAppId=${connectionState?.peerAppId} peerAddress=${connectionState?.peerAddress}"
+                    )
                     if (connectionState == null) finish()
                 }
 
@@ -64,6 +70,7 @@ class ChatActivity : ComponentActivity() {
                     ChatScreen(
                         peerLabel = state.displayLabel(),
                         onDisconnect = {
+                            Timber.d("NAVDBG ChatActivity.onDisconnect clicked")
                             BleMessaging.disconnect(this@ChatActivity)
                             finish()
                         }
@@ -71,6 +78,16 @@ class ChatActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        Timber.d("NAVDBG ChatActivity.onResume taskId=$taskId instance=${System.identityHashCode(this)}")
+    }
+
+    override fun onDestroy() {
+        Timber.d("NAVDBG ChatActivity.onDestroy instance=${System.identityHashCode(this)} finishing=$isFinishing")
+        super.onDestroy()
     }
 
     @Composable

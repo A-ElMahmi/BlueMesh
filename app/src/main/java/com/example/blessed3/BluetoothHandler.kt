@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import java.util.Collections
 import java.util.UUID
 
 
@@ -61,6 +62,8 @@ object BluetoothHandler {
     /** Maps BLE address → stable appId extracted from scan response service data. */
     private val addressToAppId = mutableMapOf<String, String>()
 
+    fun getAppIdForAddress(address: String): String? = addressToAppId[address.uppercase()]
+
     // ── Scan-for-peer state ────────────────────────────────────────────────────
 
     @Volatile private var targetAppId: String? = null
@@ -68,10 +71,6 @@ object BluetoothHandler {
     private var onPeerNotFound: (() -> Unit)? = null
     private var scanForPeerJob: Job? = null
 
-    /**
-     * Start a targeted scan for a known peer by appId.
-     * Calls [onFound] (on main thread) if found within [timeoutMs], else [onNotFound].
-     */
     fun scanForPeer(
         appId: String,
         timeoutMs: Long = 10_000,
@@ -108,7 +107,77 @@ object BluetoothHandler {
         onPeerNotFound = null
     }
 
-    // ── Peripheral callback ────────────────────────────────────────────────────
+    // ── Relay infrastructure ───────────────────────────────────────────────────
+
+    private data class RelayJob(val bytes: ByteArray, val onDone: () -> Unit)
+
+    /** Keyed by uppercase BLE address. Presence = this is a relay (not a chat) connection. */
+    private val activeRelayJobs: MutableMap<String, RelayJob> =
+        Collections.synchronizedMap(mutableMapOf())
+
+    /** Separate scan accumulator so relay scans don't disturb the DiscoverActivity list. */
+    @Volatile private var relayScanning = false
+    private val relayScanResults: MutableList<Pair<BluetoothPeripheral, String?>> =
+        Collections.synchronizedList(mutableListOf())
+
+    /**
+     * Scan for ~[durationMs] ms, then call [onComplete] with (peripheral, appId?) pairs.
+     * Results are independent of [scannedDevices].
+     */
+    fun scanForRelayNeighbors(
+        durationMs: Long = 5_000,
+        onComplete: (List<Pair<BluetoothPeripheral, String?>>) -> Unit
+    ) {
+        relayScanResults.clear()
+        relayScanning = true
+        startScanning()
+
+        scope.launch {
+            delay(durationMs)
+            centralManager.stopScan()
+            relayScanning = false
+            val results = relayScanResults.toList()
+            mainHandler.post { onComplete(results) }
+        }
+    }
+
+    /**
+     * Connect to [peripheral] solely to write [bytes] to the relay characteristic, then disconnect.
+     * Does NOT touch [MessagingConnectionState]. Calls [onDone] after the peripheral disconnects.
+     */
+    fun connectForRelay(
+        peripheral: BluetoothPeripheral,
+        bytes: ByteArray,
+        onDone: () -> Unit
+    ) {
+        activeRelayJobs[peripheral.address.uppercase()] = RelayJob(bytes, onDone)
+        centralManager.connect(peripheral, relayPeripheralCallback)
+    }
+
+    /** Peripheral callback used exclusively for relay hops — never touches MessagingConnectionState. */
+    private val relayPeripheralCallback = object : BluetoothPeripheralCallback() {
+        override fun onServicesDiscovered(peripheral: BluetoothPeripheral) {
+            val job = activeRelayJobs[peripheral.address.uppercase()] ?: return
+            peripheral.writeCharacteristic(
+                HRS_SERVICE_UUID,
+                NEW_CHARACTERISTIC_UUID,
+                job.bytes,
+                WITH_RESPONSE
+            )
+        }
+
+        override fun onCharacteristicWrite(
+            peripheral: BluetoothPeripheral,
+            value: ByteArray,
+            characteristic: BluetoothGattCharacteristic,
+            status: GattStatus
+        ) {
+            // Disconnect regardless of status so the queue can advance
+            centralManager.cancelConnection(peripheral)
+        }
+    }
+
+    // ── Normal peripheral callback ─────────────────────────────────────────────
 
     val bluetoothPeripheralCallback = object : BluetoothPeripheralCallback() {
         override fun onServicesDiscovered(peripheral: BluetoothPeripheral) {
@@ -116,7 +185,6 @@ object BluetoothHandler {
             peripheral.requestConnectionPriority(ConnectionPriority.HIGH)
             peripheral.requestMtu(512)
             peripheral.startNotify(HRS_SERVICE_UUID, HRS_MEASUREMENT_CHARACTERISTIC_UUID)
-            // Send handshake so peripheral side can learn our stable appId and save us as a peer
             val handshake = BlePacket(BlePacket.TYPE_HANDSHAKE, DeviceIdentity.appId).toBytes()
             peripheral.writeCharacteristic(HRS_SERVICE_UUID, NEW_CHARACTERISTIC_UUID, handshake, WITH_RESPONSE)
         }
@@ -162,6 +230,10 @@ object BluetoothHandler {
                     when (packet.type) {
                         BlePacket.TYPE_MSG ->
                             MessageBus.add(ChatMessage(packet.body, isFromMe = false))
+                        BlePacket.TYPE_RELAY -> {
+                            val relay = RelayPacket.fromJson(packet.body)
+                            if (relay != null) RelayManager.onReceived(relay)
+                        }
                         BlePacket.TYPE_DISCONNECT -> {
                             MessagingConnectionState.clear()
                             MessageBus.clear()
@@ -219,6 +291,14 @@ object BluetoothHandler {
                 addressToAppId[peripheral.address] = appId
             }
 
+            // Feed relay scan accumulator when a relay scan is active
+            if (relayScanning) {
+                val addr = peripheral.address
+                if (relayScanResults.none { it.first.address == addr }) {
+                    relayScanResults.add(Pair(peripheral, appId))
+                }
+            }
+
             // Targeted scan: check if this is the peer we're looking for
             val target = targetAppId
             if (target != null && appId == target) {
@@ -239,6 +319,9 @@ object BluetoothHandler {
 
         override fun onConnected(peripheral: BluetoothPeripheral) {
             Timber.i("connected to '${peripheral.name}'")
+            // Relay connections are handled entirely by relayPeripheralCallback — skip state
+            if (peripheral.address.uppercase() in activeRelayJobs) return
+
             val appId = addressToAppId[peripheral.address]
             MessagingConnectionState.setConnectedAsCentral(
                 peerAddress = peripheral.address,
@@ -249,12 +332,24 @@ object BluetoothHandler {
 
         override fun onDisconnected(peripheral: BluetoothPeripheral, status: HciStatus) {
             Timber.i("disconnected '${peripheral.name}'")
+            val addr = peripheral.address.uppercase()
+            val relayJob = activeRelayJobs.remove(addr)
+            if (relayJob != null) {
+                relayJob.onDone()
+                return
+            }
             MessagingConnectionState.clearIfPeer(peripheral.address)
             MessageBus.clear()
         }
 
         override fun onConnectionFailed(peripheral: BluetoothPeripheral, status: HciStatus) {
             Timber.e("failed to connect to '${peripheral.name}'")
+            val addr = peripheral.address.uppercase()
+            val relayJob = activeRelayJobs.remove(addr)
+            if (relayJob != null) {
+                // Still advance the queue even on failure
+                relayJob.onDone()
+            }
         }
 
         override fun onBluetoothAdapterStateChanged(state: Int) {
@@ -270,7 +365,6 @@ object BluetoothHandler {
         }
     }
 
-    /** Extracts our stable 8-byte appId from the scan response service data. */
     private fun extractAppId(scanResult: ScanResult): String? {
         val bytes = scanResult.scanRecord?.getServiceData(HRS_SERVICE_PARCEL_UUID) ?: return null
         if (bytes.size < 8) return null

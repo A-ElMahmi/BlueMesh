@@ -90,6 +90,10 @@ internal class HeartRateService(peripheralManager: BluetoothPeripheralManager, v
                     }
                 }
             }
+            BlePacket.TYPE_RELAY -> {
+                val relay = RelayPacket.fromJson(packet.body)
+                if (relay != null) RelayManager.onReceived(relay)
+            }
             BlePacket.TYPE_DISCONNECT -> {
                 MessagingConnectionState.clear()
                 MessageBus.clear()
