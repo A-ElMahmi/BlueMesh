@@ -35,11 +35,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import com.example.blessed3.ui.theme.Blessed3Theme
+import com.welie.blessed.BluetoothPeripheral
 import timber.log.Timber
 
 class MainActivity : ComponentActivity() {
     private val handler = Handler(Looper.getMainLooper())
-    private var lastAutoLaunchedIncomingPeer: String? = null
+    private var lastAutoLaunchedPeer: String? = null
+    private var directConnectInProgress = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -48,15 +50,16 @@ class MainActivity : ComponentActivity() {
             Blessed3Theme {
                 val connectionState by MessagingConnectionState.state.collectAsState(initial = null)
 
-                // Only open ChatActivity for *incoming* connections (we are the peripheral).
-                // Outgoing connections are handled inside PeerMessagesActivity itself.
+                // Single messaging destination: whenever a BLE chat connection is active,
+                // open ChatActivity once for that peer.
                 LaunchedEffect(connectionState) {
                     Timber.d(
                         "NAVDBG MainActivity.LaunchedEffect connectionState role=${connectionState?.role} " +
                             "peerAppId=${connectionState?.peerAppId} peerAddress=${connectionState?.peerAddress}"
                     )
-                    if (connectionState?.role != MessagingConnectionState.Role.WE_ARE_PERIPHERAL) {
-                        lastAutoLaunchedIncomingPeer = null
+                    val state = connectionState
+                    if (state == null) {
+                        lastAutoLaunchedPeer = null
                         return@LaunchedEffect
                     }
 
@@ -65,13 +68,13 @@ class MainActivity : ComponentActivity() {
                         return@LaunchedEffect
                     }
 
-                    val peerKey = connectionState?.peerAddress ?: "UNKNOWN"
-                    if (lastAutoLaunchedIncomingPeer == peerKey) {
+                    val peerKey = state.peerAddress
+                    if (lastAutoLaunchedPeer == peerKey) {
                         Timber.d("NAVDBG MainActivity skip duplicate auto-launch for peer=$peerKey")
                         return@LaunchedEffect
                     }
 
-                    lastAutoLaunchedIncomingPeer = peerKey
+                    lastAutoLaunchedPeer = peerKey
                     Timber.d("NAVDBG MainActivity launching ChatActivity from LaunchedEffect")
                     startActivity(
                         Intent(this@MainActivity, ChatActivity::class.java)
@@ -145,11 +148,35 @@ class MainActivity : ComponentActivity() {
 
     private fun openPeerMessages(peer: KnownPeer) {
         Timber.d("NAVDBG MainActivity.openPeerMessages appId=${peer.appId} name=${peer.displayName}")
-        val intent = Intent(this, PeerMessagesActivity::class.java).apply {
-            putExtra(PeerMessagesActivity.EXTRA_PEER_APP_ID, peer.appId)
-            putExtra(PeerMessagesActivity.EXTRA_PEER_DISPLAY_NAME, peer.displayName)
+        if (directConnectInProgress) {
+            Timber.d("NAVDBG MainActivity skip connect (already in progress)")
+            return
         }
-        startActivity(intent)
+        directConnectInProgress = true
+
+        BluetoothHandler.scanForPeer(
+            appId = peer.appId,
+            onFound = { peripheral ->
+                Timber.d("NAVDBG MainActivity scanForPeer.onFound address=${peripheral.address}")
+                connectToPeripheral(peripheral)
+            },
+            onNotFound = {
+                directConnectInProgress = false
+                Timber.d("NAVDBG MainActivity scanForPeer.onNotFound appId=${peer.appId}")
+            }
+        )
+    }
+
+    private fun connectToPeripheral(peripheral: BluetoothPeripheral) {
+        val cm = BluetoothHandler.centralManager
+        cm.stopScan()
+        if (cm.getConnectedPeripherals().any { it.address == peripheral.address } ||
+            cm.unconnectedPeripherals.containsKey(peripheral.address)
+        ) {
+            cm.cancelConnection(peripheral)
+        }
+        cm.connect(peripheral, BluetoothHandler.bluetoothPeripheralCallback)
+        directConnectInProgress = false
     }
 
     private fun formatLastSeen(ms: Long): String {
@@ -168,6 +195,12 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         Timber.d("NAVDBG MainActivity.onResume taskId=$taskId instance=${System.identityHashCode(this)}")
         startAdvertising()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        BluetoothHandler.cancelScanForPeer()
+        directConnectInProgress = false
     }
 
     private fun startAdvertising() {
