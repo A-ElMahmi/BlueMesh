@@ -5,6 +5,7 @@ import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.widget.Toast
 import android.os.Handler
 import android.os.Looper
 import androidx.activity.ComponentActivity
@@ -153,6 +154,7 @@ class MainActivity : ComponentActivity() {
             return
         }
         directConnectInProgress = true
+        Toast.makeText(this, "Scanning…", Toast.LENGTH_SHORT).show()
 
         BluetoothHandler.scanForPeer(
             appId = peer.appId,
@@ -163,6 +165,11 @@ class MainActivity : ComponentActivity() {
             onNotFound = {
                 directConnectInProgress = false
                 Timber.d("NAVDBG MainActivity scanForPeer.onNotFound appId=${peer.appId}")
+                Toast.makeText(
+                    this@MainActivity,
+                    "Device not in range",
+                    Toast.LENGTH_LONG
+                ).show()
             }
         )
     }

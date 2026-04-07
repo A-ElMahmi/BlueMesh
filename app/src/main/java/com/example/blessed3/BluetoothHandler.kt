@@ -73,7 +73,7 @@ object BluetoothHandler {
 
     fun scanForPeer(
         appId: String,
-        timeoutMs: Long = 10_000,
+        timeoutMs: Long = 3_000,
         onFound: (BluetoothPeripheral) -> Unit,
         onNotFound: () -> Unit
     ) {
