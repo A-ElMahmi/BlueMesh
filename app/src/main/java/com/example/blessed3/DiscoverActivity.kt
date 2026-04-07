@@ -30,6 +30,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
 import com.example.blessed3.ui.theme.Blessed3Theme
 import com.welie.blessed.BluetoothPeripheral
 import timber.log.Timber
@@ -40,6 +41,7 @@ import timber.log.Timber
  * finishes so the back stack returns to MainActivity (Chats).
  */
 class DiscoverActivity : ComponentActivity() {
+    private var hasAutoLaunchedChat = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -47,11 +49,27 @@ class DiscoverActivity : ComponentActivity() {
             Blessed3Theme {
                 val connectionState by MessagingConnectionState.state.collectAsState(initial = null)
 
-                LaunchedEffect(connectionState != null) {
-                    if (connectionState != null) {
-                        startActivity(Intent(this@DiscoverActivity, ChatActivity::class.java))
-                        finish()
+                LaunchedEffect(connectionState) {
+                    if (connectionState == null) {
+                        hasAutoLaunchedChat = false
+                        return@LaunchedEffect
                     }
+                    if (!lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                        Timber.d("NAVDBG DiscoverActivity skip auto-launch (not RESUMED)")
+                        return@LaunchedEffect
+                    }
+                    if (hasAutoLaunchedChat) {
+                        Timber.d("NAVDBG DiscoverActivity skip duplicate auto-launch")
+                        return@LaunchedEffect
+                    }
+
+                    hasAutoLaunchedChat = true
+                    Timber.d("NAVDBG DiscoverActivity launching ChatActivity from LaunchedEffect")
+                    startActivity(
+                        Intent(this@DiscoverActivity, ChatActivity::class.java)
+                            .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                    )
+                    finish()
                 }
 
                 DeviceListScreen(

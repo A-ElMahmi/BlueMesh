@@ -7,7 +7,6 @@ import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -23,12 +22,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -37,29 +33,50 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
 import com.example.blessed3.ui.theme.Blessed3Theme
-import com.welie.blessed.BluetoothPeripheral
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import timber.log.Timber
 
 class MainActivity : ComponentActivity() {
     private val handler = Handler(Looper.getMainLooper())
-
-    // Scan-for-peer UI state kept as Activity-level flows so we can reset on pause.
-    private val _scanningPeer = MutableStateFlow<KnownPeer?>(null)
-    private val _pendingConnection = MutableStateFlow<Pair<KnownPeer, BluetoothPeripheral>?>(null)
+    private var lastAutoLaunchedIncomingPeer: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Timber.d("NAVDBG MainActivity.onCreate taskId=$taskId instance=${System.identityHashCode(this)}")
         setContent {
             Blessed3Theme {
                 val connectionState by MessagingConnectionState.state.collectAsState(initial = null)
 
-                LaunchedEffect(connectionState != null) {
-                    if (connectionState != null) {
-                        startActivity(Intent(this@MainActivity, ChatActivity::class.java))
+                // Only open ChatActivity for *incoming* connections (we are the peripheral).
+                // Outgoing connections are handled inside PeerMessagesActivity itself.
+                LaunchedEffect(connectionState) {
+                    Timber.d(
+                        "NAVDBG MainActivity.LaunchedEffect connectionState role=${connectionState?.role} " +
+                            "peerAppId=${connectionState?.peerAppId} peerAddress=${connectionState?.peerAddress}"
+                    )
+                    if (connectionState?.role != MessagingConnectionState.Role.WE_ARE_PERIPHERAL) {
+                        lastAutoLaunchedIncomingPeer = null
+                        return@LaunchedEffect
                     }
+
+                    if (!lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                        Timber.d("NAVDBG MainActivity skip auto-launch (not RESUMED)")
+                        return@LaunchedEffect
+                    }
+
+                    val peerKey = connectionState?.peerAddress ?: "UNKNOWN"
+                    if (lastAutoLaunchedIncomingPeer == peerKey) {
+                        Timber.d("NAVDBG MainActivity skip duplicate auto-launch for peer=$peerKey")
+                        return@LaunchedEffect
+                    }
+
+                    lastAutoLaunchedIncomingPeer = peerKey
+                    Timber.d("NAVDBG MainActivity launching ChatActivity from LaunchedEffect")
+                    startActivity(
+                        Intent(this@MainActivity, ChatActivity::class.java)
+                            .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                    )
                 }
 
                 ChatsScreen()
@@ -72,8 +89,6 @@ class MainActivity : ComponentActivity() {
     @Composable
     private fun ChatsScreen() {
         val peers by KnownPeers.peersFlow.collectAsState()
-        val scanningPeer by _scanningPeer.asStateFlow().collectAsState()
-        val pendingConnection by _pendingConnection.asStateFlow().collectAsState()
 
         Column(
             modifier = Modifier
@@ -108,9 +123,7 @@ class MainActivity : ComponentActivity() {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable(enabled = scanningPeer == null) {
-                                    startScanForPeer(peer)
-                                }
+                                .clickable { openPeerMessages(peer) }
                                 .padding(vertical = 14.dp, horizontal = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
@@ -122,51 +135,21 @@ class MainActivity : ComponentActivity() {
                                     fontSize = 12.sp
                                 )
                             }
-                            if (scanningPeer?.appId == peer.appId) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.padding(end = 4.dp),
-                                    strokeWidth = 2.dp
-                                )
-                            }
                         }
                         HorizontalDivider()
                     }
                 }
             }
         }
-
-        // Confirm dialog once the targeted scan finds the peer
-        pendingConnection?.let { (peer, peripheral) ->
-            AlertDialog(
-                onDismissRequest = { _pendingConnection.value = null },
-                title = { Text("Connect?") },
-                text = { Text("Connect to ${peer.displayName}?") },
-                confirmButton = {
-                    TextButton(onClick = {
-                        _pendingConnection.value = null
-                        connectToPeripheral(peripheral)
-                    }) { Text("Yes") }
-                },
-                dismissButton = {
-                    TextButton(onClick = { _pendingConnection.value = null }) { Text("No") }
-                }
-            )
-        }
     }
 
-    private fun startScanForPeer(peer: KnownPeer) {
-        _scanningPeer.value = peer
-        BluetoothHandler.scanForPeer(
-            appId = peer.appId,
-            onFound = { peripheral ->
-                _scanningPeer.value = null
-                _pendingConnection.value = Pair(peer, peripheral)
-            },
-            onNotFound = {
-                _scanningPeer.value = null
-                Toast.makeText(this, "${peer.displayName} is out of range", Toast.LENGTH_SHORT).show()
-            }
-        )
+    private fun openPeerMessages(peer: KnownPeer) {
+        Timber.d("NAVDBG MainActivity.openPeerMessages appId=${peer.appId} name=${peer.displayName}")
+        val intent = Intent(this, PeerMessagesActivity::class.java).apply {
+            putExtra(PeerMessagesActivity.EXTRA_PEER_APP_ID, peer.appId)
+            putExtra(PeerMessagesActivity.EXTRA_PEER_DISPLAY_NAME, peer.displayName)
+        }
+        startActivity(intent)
     }
 
     private fun formatLastSeen(ms: Long): String {
@@ -179,31 +162,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // ── BLE helpers ────────────────────────────────────────────────────────────
-
-    private fun connectToPeripheral(peripheral: BluetoothPeripheral) {
-        BluetoothHandler.clearScannedDevices()
-        val cm = BluetoothHandler.centralManager
-        cm.stopScan()
-        if (cm.getConnectedPeripherals().any { it.address == peripheral.address } ||
-            cm.unconnectedPeripherals.containsKey(peripheral.address)
-        ) {
-            cm.cancelConnection(peripheral)
-        }
-        cm.connect(peripheral, BluetoothHandler.bluetoothPeripheralCallback)
-    }
+    // ── BLE advertising ────────────────────────────────────────────────────────
 
     override fun onResume() {
         super.onResume()
+        Timber.d("NAVDBG MainActivity.onResume taskId=$taskId instance=${System.identityHashCode(this)}")
         startAdvertising()
-    }
-
-    override fun onPause() {
-        super.onPause()
-        // Cancel any in-progress targeted scan so it doesn't surface stale results later.
-        BluetoothHandler.cancelScanForPeer()
-        _scanningPeer.value = null
-        _pendingConnection.value = null
     }
 
     private fun startAdvertising() {
@@ -234,14 +198,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun requestPermissions() {
-        val missing = BluetoothHandler.centralManager.getMissingPermissions()
-        if (missing.isNotEmpty() && !permissionRequestInProgress) {
-            permissionRequestInProgress = true
-            blePermissionRequest.launch(missing)
-        }
-    }
-
     private var permissionRequestInProgress = false
     private val blePermissionRequest =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
@@ -252,7 +208,6 @@ class MainActivity : ComponentActivity() {
     private val enableBleRequest =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             if (result.resultCode == RESULT_OK) {
-                // Bluetooth just got enabled; re-attempt advertising
                 startAdvertising()
             }
         }

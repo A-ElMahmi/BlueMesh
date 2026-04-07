@@ -23,6 +23,7 @@ data class BlePacket(val type: String, val body: String = "") {
         const val TYPE_MSG = "msg"
         const val TYPE_DISCONNECT = "disconnect"
         const val TYPE_HANDSHAKE = "handshake"
+        const val TYPE_RELAY = "relay"
 
         fun fromBytes(bytes: ByteArray): BlePacket? = try {
             val json = JSONObject(bytes.toString(Charsets.UTF_8))
