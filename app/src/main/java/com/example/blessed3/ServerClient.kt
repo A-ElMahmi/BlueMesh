@@ -20,7 +20,7 @@ data class ServerMessage(
 object ServerClient {
 
     private const val TAG = "ServerClient"
-    const val SERVER_URL = "https://ad32-109-79-50-114.ngrok-free.app"
+    const val SERVER_URL = "https://50dc-109-79-50-114.ngrok-free.app"
 
     private val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
 

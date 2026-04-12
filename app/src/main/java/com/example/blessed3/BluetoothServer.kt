@@ -80,16 +80,20 @@ class BluetoothServer(private val context: Context) {
         }
 
         override fun onCentralConnected(bluetoothCentral: BluetoothCentral) {
-            MessagingConnectionState.setConnectedAsPeripheral(bluetoothCentral.address, bluetoothCentral.name)
+            // Don't set MessagingConnectionState here — wait for the handshake
+            // packet so relay-only connections stay invisible to the UI.
             for (serviceImplementation in serviceImplementations.values) {
                 serviceImplementation.onCentralConnected(bluetoothCentral)
             }
         }
 
         override fun onCentralDisconnected(bluetoothCentral: BluetoothCentral) {
-            // Any central disconnect ends our single-peer messaging session
-            MessagingConnectionState.clear()
-            MessageBus.clear()
+            // Only tear down state if this was a real chat session (not a relay write)
+            val peer = MessagingConnectionState.currentPeer
+            if (peer != null && peer.role == MessagingConnectionState.Role.WE_ARE_PERIPHERAL) {
+                MessagingConnectionState.clear()
+                MessageBus.clear()
+            }
             for (serviceImplementation in serviceImplementations.values) {
                 serviceImplementation.onCentralDisconnected(bluetoothCentral)
             }
