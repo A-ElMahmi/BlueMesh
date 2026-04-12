@@ -20,7 +20,9 @@ object MessagingConnectionState {
         /** We connected to the peer (we are central, they are peripheral). */
         WE_ARE_CENTRAL,
         /** The peer connected to us (we are peripheral, they are central). */
-        WE_ARE_PERIPHERAL
+        WE_ARE_PERIPHERAL,
+        /** No direct BLE connection; messages routed via server (internet gateway). */
+        WE_ARE_INTERNET
     }
 
     data class Connected(
@@ -66,6 +68,16 @@ object MessagingConnectionState {
             peerName = centralName,
             role = Role.WE_ARE_PERIPHERAL,
             peerAppId = peerAppId
+        )
+    }
+
+    /** Open an internet-routed chat session to an out-of-range peer. */
+    fun setConnectedAsInternet(targetAppId: String, targetName: String) {
+        _state.value = Connected(
+            peerAddress = targetAppId,
+            peerName = targetName,
+            role = Role.WE_ARE_INTERNET,
+            peerAppId = targetAppId
         )
     }
 

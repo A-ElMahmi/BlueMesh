@@ -367,8 +367,8 @@ object BluetoothHandler {
 
     private fun extractAppId(scanResult: ScanResult): String? {
         val bytes = scanResult.scanRecord?.getServiceData(HRS_SERVICE_PARCEL_UUID) ?: return null
-        if (bytes.size < 8) return null
-        return bytes.copyOfRange(0, 8).joinToString("") { "%02x".format(it) }
+        if (bytes.size < 4) return null
+        return bytes.copyOfRange(0, 4).joinToString("") { "%02x".format(it) }
     }
 
     // ── Initialization ─────────────────────────────────────────────────────────

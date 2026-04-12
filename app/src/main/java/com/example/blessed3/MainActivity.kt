@@ -35,14 +35,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
 import com.example.blessed3.ui.theme.Blessed3Theme
 import com.welie.blessed.BluetoothPeripheral
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import timber.log.Timber
 
 class MainActivity : ComponentActivity() {
     private val handler = Handler(Looper.getMainLooper())
     private var lastAutoLaunchedPeer: String? = null
     private var directConnectInProgress = false
+    private var pollingJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -164,12 +169,8 @@ class MainActivity : ComponentActivity() {
             },
             onNotFound = {
                 directConnectInProgress = false
-                Timber.d("NAVDBG MainActivity scanForPeer.onNotFound appId=${peer.appId}")
-                Toast.makeText(
-                    this@MainActivity,
-                    "Device not in range",
-                    Toast.LENGTH_LONG
-                ).show()
+                Timber.d("NAVDBG MainActivity scanForPeer.onNotFound → internet mode for ${peer.appId}")
+                MessagingConnectionState.setConnectedAsInternet(peer.appId, peer.displayName)
             }
         )
     }
@@ -202,12 +203,34 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         Timber.d("NAVDBG MainActivity.onResume taskId=$taskId instance=${System.identityHashCode(this)}")
         startAdvertising()
+        startPollingIfOnline()
     }
 
     override fun onPause() {
         super.onPause()
+        pollingJob?.cancel()
+        pollingJob = null
         BluetoothHandler.cancelScanForPeer()
         directConnectInProgress = false
+    }
+
+    private fun startPollingIfOnline() {
+        if (!NetworkUtils.hasInternet(this)) return
+        pollingJob = lifecycleScope.launch {
+            while (true) {
+                delay(15_000)
+                val messages = ServerClient.pollMessages(DeviceIdentity.appId)
+                messages.forEach { msg ->
+                    val name = KnownPeers.getAll()
+                        .find { it.appId == msg.from }?.displayName ?: msg.from
+                    Toast.makeText(
+                        this@MainActivity,
+                        "Message from $name: ${msg.content}",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            }
+        }
     }
 
     private fun startAdvertising() {
