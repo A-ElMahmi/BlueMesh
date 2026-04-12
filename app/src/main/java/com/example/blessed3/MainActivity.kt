@@ -225,10 +225,11 @@ class MainActivity : ComponentActivity() {
                         .find { it.appId == msg.from }?.displayName ?: msg.from
                     Toast.makeText(
                         this@MainActivity,
-                        "Message from $name: ${msg.content}",
+                        "From $name: ${msg.content}",
                         Toast.LENGTH_LONG
                     ).show()
                 }
+                RelayManager.deliverPendingFromServer()
             }
         }
     }
