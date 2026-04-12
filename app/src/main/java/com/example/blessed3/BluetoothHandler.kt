@@ -177,6 +177,7 @@ object BluetoothHandler {
 
     val bluetoothPeripheralCallback = object : BluetoothPeripheralCallback() {
         override fun onServicesDiscovered(peripheral: BluetoothPeripheral) {
+            if (peripheral.address.uppercase() in activeRelayJobs) return
             peripheralGlobal = peripheral
             peripheral.requestConnectionPriority(ConnectionPriority.HIGH)
             peripheral.requestMtu(512)
@@ -191,6 +192,7 @@ object BluetoothHandler {
             characteristic: BluetoothGattCharacteristic,
             status: GattStatus
         ) {
+            if (peripheral.address.uppercase() in activeRelayJobs) return
             if (disconnectAfterWrite) {
                 disconnectAfterWrite = false
                 disconnectAsCentral()
@@ -215,6 +217,7 @@ object BluetoothHandler {
             characteristic: BluetoothGattCharacteristic,
             status: GattStatus
         ) {
+            if (peripheral.address.uppercase() in activeRelayJobs) return
             when (characteristic.uuid) {
                 BleService.MEASUREMENT_CHARACTERISTIC_UUID -> {
                     Log.d("BleMsg", "CENTRAL recv ${value.size} bytes from ${peripheral.address}")

@@ -70,13 +70,19 @@ class BluetoothServer(private val context: Context) {
         }
 
         override fun onCentralConnected(bluetoothCentral: BluetoothCentral) {
-            MessagingConnectionState.setConnectedAsPeripheral(bluetoothCentral.address, bluetoothCentral.name)
+            // Relay-only connections never send handshake — avoid opening chat until TYPE_HANDSHAKE.
             bleService.onCentralConnected(bluetoothCentral)
         }
 
         override fun onCentralDisconnected(bluetoothCentral: BluetoothCentral) {
-            MessagingConnectionState.clear()
-            MessageBus.clear()
+            val peer = MessagingConnectionState.currentPeer
+            if (peer != null &&
+                peer.role == MessagingConnectionState.Role.WE_ARE_PERIPHERAL &&
+                MessagingConnectionState.isPeer(bluetoothCentral.address)
+            ) {
+                MessagingConnectionState.clear()
+                MessageBus.clear()
+            }
             bleService.onCentralDisconnected(bluetoothCentral)
         }
 
