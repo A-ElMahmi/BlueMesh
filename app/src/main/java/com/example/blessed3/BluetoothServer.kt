@@ -28,46 +28,37 @@ class BluetoothServer(private val context: Context) {
     lateinit var peripheralManager: BluetoothPeripheralManager
     @Volatile private var disconnectAfterNotification = false
     private val bluetoothManager: BluetoothManager
-    private val serviceImplementations = HashMap<BluetoothGattService, Service>()
+    private lateinit var bleService: BleService
+
     private val peripheralManagerCallback: BluetoothPeripheralManagerCallback = object : BluetoothPeripheralManagerCallback() {
         override fun onServiceAdded(status: GattStatus, service: BluetoothGattService) {}
+
         override fun onCharacteristicRead(bluetoothCentral: BluetoothCentral, characteristic: BluetoothGattCharacteristic): ReadResponse {
-            val serviceImplementation = serviceImplementations[characteristic.service]
-            return serviceImplementation?.onCharacteristicRead(bluetoothCentral, characteristic) ?: super.onCharacteristicRead(bluetoothCentral, characteristic)
+            return bleService.onCharacteristicRead(bluetoothCentral, characteristic)
         }
 
         override fun onCharacteristicWrite(bluetoothCentral: BluetoothCentral, characteristic: BluetoothGattCharacteristic, value: ByteArray): GattStatus {
-            val serviceImplementation = serviceImplementations[characteristic.service]
-            return serviceImplementation?.onCharacteristicWrite(bluetoothCentral, characteristic, value) ?: GattStatus.REQUEST_NOT_SUPPORTED
+            return bleService.onCharacteristicWrite(bluetoothCentral, characteristic, value)
         }
 
         override fun onCharacteristicWriteCompleted(bluetoothCentral: BluetoothCentral, characteristic: BluetoothGattCharacteristic, value: ByteArray) {
-            val serviceImplementation = serviceImplementations[characteristic.service]
-            serviceImplementation?.onCharacteristicWriteCompleted(bluetoothCentral, characteristic, value)
+            bleService.onCharacteristicWriteCompleted(bluetoothCentral, characteristic, value)
         }
 
         override fun onDescriptorRead(bluetoothCentral: BluetoothCentral, descriptor: BluetoothGattDescriptor): ReadResponse {
-            val characteristic = requireNotNull(descriptor.characteristic) { "Descriptor has no Characteristic" }
-            val service = requireNotNull(characteristic.service) { "Characteristic has no Service" }
-            val serviceImplementation = serviceImplementations[service]
-            return serviceImplementation?.onDescriptorRead(bluetoothCentral, descriptor) ?: super.onDescriptorRead(bluetoothCentral, descriptor)
+            return bleService.onDescriptorRead(bluetoothCentral, descriptor)
         }
 
         override fun onDescriptorWrite(bluetoothCentral: BluetoothCentral, descriptor: BluetoothGattDescriptor, value: ByteArray): GattStatus {
-            val characteristic = requireNotNull(descriptor.characteristic) { "Descriptor has no Characteristic"}
-            val service = requireNotNull(characteristic.service) { "Characteristic has no Service" }
-            val serviceImplementation = serviceImplementations[service]
-            return serviceImplementation?.onDescriptorWrite(bluetoothCentral, descriptor, value) ?: GattStatus.REQUEST_NOT_SUPPORTED
+            return bleService.onDescriptorWrite(bluetoothCentral, descriptor, value)
         }
 
         override fun onNotifyingEnabled(bluetoothCentral: BluetoothCentral, characteristic: BluetoothGattCharacteristic) {
-            val serviceImplementation = serviceImplementations[characteristic.service]
-            serviceImplementation?.onNotifyingEnabled(bluetoothCentral, characteristic)
+            bleService.onNotifyingEnabled(bluetoothCentral, characteristic)
         }
 
         override fun onNotifyingDisabled(bluetoothCentral: BluetoothCentral, characteristic: BluetoothGattCharacteristic) {
-            val serviceImplementation = serviceImplementations[characteristic.service]
-            serviceImplementation?.onNotifyingDisabled(bluetoothCentral, characteristic)
+            bleService.onNotifyingDisabled(bluetoothCentral, characteristic)
         }
 
         override fun onNotificationSent(bluetoothCentral: BluetoothCentral, value: ByteArray, characteristic: BluetoothGattCharacteristic, status: GattStatus) {
@@ -75,28 +66,18 @@ class BluetoothServer(private val context: Context) {
                 disconnectAfterNotification = false
                 peripheralManager.cancelConnection(bluetoothCentral)
             }
-            val serviceImplementation = serviceImplementations[characteristic.service]
-            serviceImplementation?.onNotificationSent(bluetoothCentral, value, characteristic, status)
+            bleService.onNotificationSent(bluetoothCentral, value, characteristic, status)
         }
 
         override fun onCentralConnected(bluetoothCentral: BluetoothCentral) {
-            // Don't set MessagingConnectionState here — wait for the handshake
-            // packet so relay-only connections stay invisible to the UI.
-            for (serviceImplementation in serviceImplementations.values) {
-                serviceImplementation.onCentralConnected(bluetoothCentral)
-            }
+            MessagingConnectionState.setConnectedAsPeripheral(bluetoothCentral.address, bluetoothCentral.name)
+            bleService.onCentralConnected(bluetoothCentral)
         }
 
         override fun onCentralDisconnected(bluetoothCentral: BluetoothCentral) {
-            // Only tear down state if this was a real chat session (not a relay write)
-            val peer = MessagingConnectionState.currentPeer
-            if (peer != null && peer.role == MessagingConnectionState.Role.WE_ARE_PERIPHERAL) {
-                MessagingConnectionState.clear()
-                MessageBus.clear()
-            }
-            for (serviceImplementation in serviceImplementations.values) {
-                serviceImplementation.onCentralDisconnected(bluetoothCentral)
-            }
+            MessagingConnectionState.clear()
+            MessageBus.clear()
+            bleService.onCentralDisconnected(bluetoothCentral)
         }
 
         override fun onAdvertisingStarted(settingsInEffect: AdvertiseSettings) {}
@@ -108,13 +89,12 @@ class BluetoothServer(private val context: Context) {
             }
         }
     }
-    private lateinit var hrs: HeartRateService
 
     fun startAdvertising() {
-        startAdvertising(HeartRateService.HRS_SERVICE_UUID)
+        startAdvertising(BleService.SERVICE_UUID)
     }
 
-     fun startAdvertising(serviceUUID: UUID?) {
+    fun startAdvertising(serviceUUID: UUID?) {
         val advertiseSettings = AdvertiseSettings.Builder()
             .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_BALANCED)
             .setConnectable(true)
@@ -132,37 +112,22 @@ class BluetoothServer(private val context: Context) {
         peripheralManager.startAdvertising(advertiseSettings, advertiseData, scanResponse)
     }
 
-    private fun setupServices() {
-        for (service in serviceImplementations.keys) {
-            peripheralManager.add(service)
-        }
-
-        println("Services ${peripheralManager.services}")
-    }
-
     fun initialize() {
         val bluetoothAdapter = bluetoothManager.adapter
         bluetoothAdapter.name = Build.MODEL
 
-//        peripheralManager.close()
-//        peripheralManager.stopAdvertising()
-
         peripheralManager.openGattServer()
         peripheralManager.removeAllServices()
 
-        hrs = HeartRateService(peripheralManager, context)
-        serviceImplementations[hrs.service] = hrs
+        bleService = BleService(peripheralManager, context)
+        peripheralManager.add(bleService.service)
 
-        println("Pre setupServices")
-        setupServices()
-        println("Post setupServices")
         isInitialized = true
     }
 
     fun sendBytesAndDisconnect(bytes: ByteArray) {
         disconnectAfterNotification = true
         sendBytes(bytes)
-        // Fallback: if onNotificationSent never fires (connection already gone), force-clear after 5s
         Handler(Looper.getMainLooper()).postDelayed({
             if (disconnectAfterNotification) {
                 disconnectAfterNotification = false
@@ -175,7 +140,7 @@ class BluetoothServer(private val context: Context) {
 
     fun sendBytes(bytes: ByteArray) {
         val central = getConnectedCentral() ?: return
-        hrs.sendToCentral(central, bytes)
+        bleService.sendToCentral(central, bytes)
     }
 
     fun disconnectAsPeripheral() {
@@ -184,11 +149,9 @@ class BluetoothServer(private val context: Context) {
         }
     }
 
-    /** True if we have a central connected with this address (we are peripheral). */
     fun isCentralConnected(address: String): Boolean =
         peripheralManager.connectedCentrals.any { it.address.equals(address, ignoreCase = true) }
 
-    /** The single connected central, if we are in peripheral role with one peer. */
     fun getConnectedCentral(): BluetoothCentral? =
         peripheralManager.connectedCentrals.firstOrNull()
 

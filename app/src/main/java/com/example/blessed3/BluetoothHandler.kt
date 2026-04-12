@@ -29,7 +29,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.util.Collections
-import java.util.UUID
 
 
 @SuppressLint("StaticFieldLeak")
@@ -50,10 +49,7 @@ object BluetoothHandler {
 
     fun clearScannedDevices() { _scannedDevices.value = emptyList() }
 
-    private val HRS_SERVICE_UUID: UUID = UUID.fromString("0000180D-0000-1000-8000-00805f9b34fb")
-    private val HRS_SERVICE_PARCEL_UUID = ParcelUuid(HRS_SERVICE_UUID)
-    private val HRS_MEASUREMENT_CHARACTERISTIC_UUID: UUID = UUID.fromString("00002A37-0000-1000-8000-00805f9b34fb")
-    private val NEW_CHARACTERISTIC_UUID: UUID = UUID.fromString("00002A39-0000-1000-8000-00805f9b34fb")
+    private val SERVICE_PARCEL_UUID = ParcelUuid(BleService.SERVICE_UUID)
 
     private lateinit var peripheralGlobal: BluetoothPeripheral
 
@@ -159,8 +155,8 @@ object BluetoothHandler {
         override fun onServicesDiscovered(peripheral: BluetoothPeripheral) {
             val job = activeRelayJobs[peripheral.address.uppercase()] ?: return
             peripheral.writeCharacteristic(
-                HRS_SERVICE_UUID,
-                NEW_CHARACTERISTIC_UUID,
+                BleService.SERVICE_UUID,
+                BleService.MEASUREMENT_CHARACTERISTIC_UUID,
                 job.bytes,
                 WITH_RESPONSE
             )
@@ -184,9 +180,9 @@ object BluetoothHandler {
             peripheralGlobal = peripheral
             peripheral.requestConnectionPriority(ConnectionPriority.HIGH)
             peripheral.requestMtu(512)
-            peripheral.startNotify(HRS_SERVICE_UUID, HRS_MEASUREMENT_CHARACTERISTIC_UUID)
+            peripheral.startNotify(BleService.SERVICE_UUID, BleService.MEASUREMENT_CHARACTERISTIC_UUID)
             val handshake = BlePacket(BlePacket.TYPE_HANDSHAKE, DeviceIdentity.appId).toBytes()
-            peripheral.writeCharacteristic(HRS_SERVICE_UUID, NEW_CHARACTERISTIC_UUID, handshake, WITH_RESPONSE)
+            peripheral.writeCharacteristic(BleService.SERVICE_UUID, BleService.MEASUREMENT_CHARACTERISTIC_UUID, handshake, WITH_RESPONSE)
         }
 
         override fun onCharacteristicWrite(
@@ -220,7 +216,7 @@ object BluetoothHandler {
             status: GattStatus
         ) {
             when (characteristic.uuid) {
-                HRS_MEASUREMENT_CHARACTERISTIC_UUID -> {
+                BleService.MEASUREMENT_CHARACTERISTIC_UUID -> {
                     Log.d("BleMsg", "CENTRAL recv ${value.size} bytes from ${peripheral.address}")
                     val packet = BlePacket.fromBytes(value) ?: run {
                         Log.d("BleMsg", "CENTRAL recv: failed to parse packet")
@@ -239,11 +235,6 @@ object BluetoothHandler {
                             MessageBus.clear()
                         }
                     }
-                }
-
-                NEW_CHARACTERISTIC_UUID -> {
-                    val text = value.toString(Charsets.UTF_8)
-                    println("New Char: $text")
                 }
             }
         }
@@ -269,7 +260,7 @@ object BluetoothHandler {
         val peripheral = centralManager.getConnectedPeripherals().find {
             it.address.equals(peer.peerAddress, ignoreCase = true)
         } ?: return
-        peripheral.writeCharacteristic(HRS_SERVICE_UUID, NEW_CHARACTERISTIC_UUID, bytes, WITH_RESPONSE)
+        peripheral.writeCharacteristic(BleService.SERVICE_UUID, BleService.MEASUREMENT_CHARACTERISTIC_UUID, bytes, WITH_RESPONSE)
     }
 
     fun disconnectAsCentral() {
@@ -361,12 +352,12 @@ object BluetoothHandler {
 
     fun startScanning() {
         if (centralManager.isNotScanning) {
-            centralManager.scanForPeripheralsWithServices(setOf(HRS_SERVICE_UUID))
+            centralManager.scanForPeripheralsWithServices(setOf(BleService.SERVICE_UUID))
         }
     }
 
     private fun extractAppId(scanResult: ScanResult): String? {
-        val bytes = scanResult.scanRecord?.getServiceData(HRS_SERVICE_PARCEL_UUID) ?: return null
+        val bytes = scanResult.scanRecord?.getServiceData(SERVICE_PARCEL_UUID) ?: return null
         if (bytes.size < 4) return null
         return bytes.copyOfRange(0, 4).joinToString("") { "%02x".format(it) }
     }

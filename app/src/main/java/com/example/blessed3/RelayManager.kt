@@ -43,8 +43,7 @@ object RelayManager {
             messageId = messageId,
             originAppId = DeviceIdentity.appId,
             destinationAppId = destinationAppId,
-            content = content,
-            seenBy = emptyList()
+            content = content
         )
         val bleBytes = BlePacket(BlePacket.TYPE_RELAY, packet.toJson()).toBytes()
 
