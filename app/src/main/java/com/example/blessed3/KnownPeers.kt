@@ -11,7 +11,8 @@ import org.json.JSONObject
 data class KnownPeer(
     val appId: String,
     val displayName: String,
-    val lastSeenMs: Long
+    val lastSeenMs: Long,
+    val unreadCount: Int = 0
 )
 
 /**
@@ -32,16 +33,57 @@ object KnownPeers {
         _peersFlow.value = loadAll()
     }
 
+    /**
+     * Upserts peer; preserves existing [KnownPeer.unreadCount] when updating the same appId.
+     */
     fun save(peer: KnownPeer) {
+        val normalized = peer.copy(appId = peer.appId.lowercase())
         val current = _peersFlow.value.toMutableList()
-        val idx = current.indexOfFirst { it.appId == peer.appId }
-        if (idx >= 0) current[idx] = peer else current.add(0, peer)
+        val idx = current.indexOfFirst { it.appId == normalized.appId }
+        val merged = if (idx >= 0) {
+            normalized.copy(unreadCount = current[idx].unreadCount)
+        } else normalized
+        if (idx >= 0) current[idx] = merged else current.add(merged)
         val sorted = current.sortedByDescending { it.lastSeenMs }
-        prefs.edit().putString(KEY_PEERS, serialize(sorted)).apply()
-        _peersFlow.value = sorted
+        persist(sorted)
+    }
+
+    fun incrementUnread(appId: String) {
+        val id = appId.lowercase()
+        val current = _peersFlow.value.toMutableList()
+        val idx = current.indexOfFirst { it.appId == id }
+        if (idx < 0) {
+            current.add(
+                KnownPeer(
+                    appId = id,
+                    displayName = id,
+                    lastSeenMs = System.currentTimeMillis(),
+                    unreadCount = 1
+                )
+            )
+        } else {
+            val p = current[idx]
+            current[idx] = p.copy(unreadCount = p.unreadCount + 1)
+        }
+        val sorted = current.sortedByDescending { it.lastSeenMs }
+        persist(sorted)
+    }
+
+    fun clearUnread(appId: String) {
+        val id = appId.lowercase()
+        val current = _peersFlow.value.toMutableList()
+        val idx = current.indexOfFirst { it.appId == id }
+        if (idx < 0) return
+        current[idx] = current[idx].copy(unreadCount = 0)
+        persist(current.sortedByDescending { it.lastSeenMs })
     }
 
     fun getAll(): List<KnownPeer> = _peersFlow.value
+
+    private fun persist(peers: List<KnownPeer>) {
+        prefs.edit().putString(KEY_PEERS, serialize(peers)).apply()
+        _peersFlow.value = peers
+    }
 
     private fun loadAll(): List<KnownPeer> {
         val json = prefs.getString(KEY_PEERS, null) ?: return emptyList()
@@ -52,7 +94,8 @@ object KnownPeers {
                 KnownPeer(
                     appId = obj.getString("appId"),
                     displayName = obj.getString("displayName"),
-                    lastSeenMs = obj.getLong("lastSeenMs")
+                    lastSeenMs = obj.getLong("lastSeenMs"),
+                    unreadCount = if (obj.has("unreadCount")) obj.getInt("unreadCount") else 0
                 )
             }
         } catch (e: Exception) {
@@ -67,6 +110,7 @@ object KnownPeers {
                 put("appId", peer.appId)
                 put("displayName", peer.displayName)
                 put("lastSeenMs", peer.lastSeenMs)
+                put("unreadCount", peer.unreadCount)
             })
         }
         return arr.toString()

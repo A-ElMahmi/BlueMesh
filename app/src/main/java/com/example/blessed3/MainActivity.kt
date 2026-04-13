@@ -5,7 +5,6 @@ import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
-import android.widget.Toast
 import android.os.Handler
 import android.os.Looper
 import androidx.activity.ComponentActivity
@@ -27,17 +26,15 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import com.example.blessed3.ui.theme.Blessed3Theme
-import com.welie.blessed.BluetoothPeripheral
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -45,8 +42,6 @@ import timber.log.Timber
 
 class MainActivity : ComponentActivity() {
     private val handler = Handler(Looper.getMainLooper())
-    private var lastAutoLaunchedPeer: String? = null
-    private var directConnectInProgress = false
     private var pollingJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -54,46 +49,10 @@ class MainActivity : ComponentActivity() {
         Timber.d("NAVDBG MainActivity.onCreate taskId=$taskId instance=${System.identityHashCode(this)}")
         setContent {
             Blessed3Theme {
-                val connectionState by MessagingConnectionState.state.collectAsState(initial = null)
-
-                // Single messaging destination: whenever a BLE chat connection is active,
-                // open ChatActivity once for that peer.
-                LaunchedEffect(connectionState) {
-                    Timber.d(
-                        "NAVDBG MainActivity.LaunchedEffect connectionState role=${connectionState?.role} " +
-                            "peerAppId=${connectionState?.peerAppId} peerAddress=${connectionState?.peerAddress}"
-                    )
-                    val state = connectionState
-                    if (state == null) {
-                        lastAutoLaunchedPeer = null
-                        return@LaunchedEffect
-                    }
-
-                    if (!lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
-                        Timber.d("NAVDBG MainActivity skip auto-launch (not RESUMED)")
-                        return@LaunchedEffect
-                    }
-
-                    val peerKey = state.peerAddress
-                    if (lastAutoLaunchedPeer == peerKey) {
-                        Timber.d("NAVDBG MainActivity skip duplicate auto-launch for peer=$peerKey")
-                        return@LaunchedEffect
-                    }
-
-                    lastAutoLaunchedPeer = peerKey
-                    Timber.d("NAVDBG MainActivity launching ChatActivity from LaunchedEffect")
-                    startActivity(
-                        Intent(this@MainActivity, ChatActivity::class.java)
-                            .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                    )
-                }
-
                 ChatsScreen()
             }
         }
     }
-
-    // ── Chats Screen ───────────────────────────────────────────────────────────
 
     @Composable
     private fun ChatsScreen() {
@@ -138,7 +97,11 @@ class MainActivity : ComponentActivity() {
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(peer.displayName, fontSize = 17.sp)
+                                Text(
+                                    peer.displayName,
+                                    fontSize = 17.sp,
+                                    fontWeight = if (peer.unreadCount > 0) FontWeight.Bold else FontWeight.Normal
+                                )
                                 Text(
                                     text = formatLastSeen(peer.lastSeenMs),
                                     fontSize = 12.sp
@@ -153,38 +116,13 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun openPeerMessages(peer: KnownPeer) {
-        Timber.d("NAVDBG MainActivity.openPeerMessages appId=${peer.appId} name=${peer.displayName}")
-        if (directConnectInProgress) {
-            Timber.d("NAVDBG MainActivity skip connect (already in progress)")
-            return
-        }
-        directConnectInProgress = true
-        Toast.makeText(this, "Scanning…", Toast.LENGTH_SHORT).show()
-
-        BluetoothHandler.scanForPeer(
-            appId = peer.appId,
-            onFound = { peripheral ->
-                Timber.d("NAVDBG MainActivity scanForPeer.onFound address=${peripheral.address}")
-                connectToPeripheral(peripheral)
-            },
-            onNotFound = {
-                directConnectInProgress = false
-                Timber.d("NAVDBG MainActivity scanForPeer.onNotFound → internet mode for ${peer.appId}")
-                MessagingConnectionState.setConnectedAsInternet(peer.appId, peer.displayName)
-            }
+        Timber.d("NAVDBG MainActivity.openPeerMessages appId=${peer.appId}")
+        startActivity(
+            Intent(this, ChatActivity::class.java)
+                .putExtra(ChatActivity.EXTRA_PEER_APP_ID, peer.appId)
+                .putExtra(ChatActivity.EXTRA_DISPLAY_NAME, peer.displayName)
+                .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
         )
-    }
-
-    private fun connectToPeripheral(peripheral: BluetoothPeripheral) {
-        val cm = BluetoothHandler.centralManager
-        cm.stopScan()
-        if (cm.getConnectedPeripherals().any { it.address == peripheral.address } ||
-            cm.unconnectedPeripherals.containsKey(peripheral.address)
-        ) {
-            cm.cancelConnection(peripheral)
-        }
-        cm.connect(peripheral, BluetoothHandler.bluetoothPeripheralCallback)
-        directConnectInProgress = false
     }
 
     private fun formatLastSeen(ms: Long): String {
@@ -196,8 +134,6 @@ class MainActivity : ComponentActivity() {
             else -> "${diff / 86_400_000}d ago"
         }
     }
-
-    // ── BLE advertising ────────────────────────────────────────────────────────
 
     override fun onResume() {
         super.onResume()
@@ -211,7 +147,6 @@ class MainActivity : ComponentActivity() {
         pollingJob?.cancel()
         pollingJob = null
         BluetoothHandler.cancelScanForPeer()
-        directConnectInProgress = false
     }
 
     private fun startPollingIfOnline() {
@@ -221,13 +156,11 @@ class MainActivity : ComponentActivity() {
                 delay(15_000)
                 val messages = ServerClient.pollMessages(DeviceIdentity.appId)
                 messages.forEach { msg ->
-                    val name = KnownPeers.getAll()
-                        .find { it.appId == msg.from }?.displayName ?: msg.from
-                    Toast.makeText(
-                        this@MainActivity,
-                        "From $name: ${msg.content}",
-                        Toast.LENGTH_LONG
-                    ).show()
+                    ChatHistoryRepository.appendInbound(
+                        senderAppId = msg.from,
+                        text = msg.content,
+                        dedupeKey = msg.messageId
+                    )
                 }
                 RelayManager.deliverPendingFromServer()
             }
