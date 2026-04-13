@@ -369,6 +369,10 @@ object BluetoothHandler {
         }
     }
 
+    fun stopScanning() {
+        centralManager.stopScan()
+    }
+
     private fun extractAppId(scanResult: ScanResult): String? {
         val bytes = scanResult.scanRecord?.getServiceData(SERVICE_PARCEL_UUID) ?: return null
         if (bytes.size < 4) return null
