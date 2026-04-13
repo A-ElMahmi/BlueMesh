@@ -7,6 +7,19 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+def localProps = new Properties()
+def localPropsFile = rootProject.file("local.properties")
+if (localPropsFile.exists()) {
+    localPropsFile.withInputStream { localProps.load(it) }
+}
+
+/** Prefer env (CI), then local.properties — see local.properties.example */
+def serverBaseUrl = (System.getenv("SERVER_BASE_URL") ?: localProps.getProperty("server.base.url", "")).trim()
+def serverApiKey = (System.getenv("SERVER_API_KEY") ?: localProps.getProperty("server.api.key", "")).trim()
+if (serverBaseUrl.isEmpty()) {
+    serverBaseUrl = "https://example.invalid"
+}
+
 android {
     namespace = 'com.example.blessed3'
     compileSdk = 36
@@ -22,6 +35,9 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+
+        buildConfigField "String", "SERVER_BASE_URL", "\"${serverBaseUrl.replace("\\", "\\\\").replace("\"", "\\\"")}\""
+        buildConfigField "String", "SERVER_API_KEY", "\"${serverApiKey.replace("\\", "\\\\").replace("\"", "\\\"")}\""
     }
 
     buildTypes {
@@ -41,6 +57,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     packagingOptions {
         resources {

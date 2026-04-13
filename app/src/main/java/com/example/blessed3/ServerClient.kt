@@ -21,7 +21,6 @@ data class ServerMessage(
 object ServerClient {
 
     private const val TAG = "ServerClient"
-    const val SERVER_URL = "https://50dc-109-79-50-114.ngrok-free.app"
 
     private val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
 
@@ -29,7 +28,15 @@ object ServerClient {
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(10, TimeUnit.SECONDS)
         .writeTimeout(10, TimeUnit.SECONDS)
+        .addInterceptor { chain ->
+            val req = chain.request().newBuilder()
+                .header("X-API-Key", BuildConfig.SERVER_API_KEY)
+                .build()
+            chain.proceed(req)
+        }
         .build()
+
+    private fun String.withBaseUrl(): String = BuildConfig.SERVER_BASE_URL.trimEnd('/') + this
 
     suspend fun postMessage(messageId: String, from: String, to: String, content: String) {
         withContext(Dispatchers.IO) {
@@ -42,7 +49,7 @@ object ServerClient {
                 }
                 val body = json.toString().toRequestBody(JSON_MEDIA)
                 val request = Request.Builder()
-                    .url("$SERVER_URL/message")
+                    .url("/message".withBaseUrl())
                     .post(body)
                     .build()
                 val response = client.newCall(request).execute()
@@ -57,7 +64,7 @@ object ServerClient {
     suspend fun pollRelayPending(): List<ServerMessage> = withContext(Dispatchers.IO) {
         try {
             val request = Request.Builder()
-                .url("$SERVER_URL/relay-pending")
+                .url("/relay-pending".withBaseUrl())
                 .get()
                 .build()
             val response = client.newCall(request).execute()
@@ -85,7 +92,7 @@ object ServerClient {
         withContext(Dispatchers.IO) {
             try {
                 val request = Request.Builder()
-                    .url("$SERVER_URL/relay-confirm/$messageId")
+                    .url("/relay-confirm/$messageId".withBaseUrl())
                     .post("".toRequestBody(null))
                     .build()
                 val response = client.newCall(request).execute()
@@ -100,7 +107,7 @@ object ServerClient {
     suspend fun pollMessages(myAppId: String): List<ServerMessage> = withContext(Dispatchers.IO) {
         try {
             val request = Request.Builder()
-                .url("$SERVER_URL/messages/$myAppId")
+                .url("/messages/$myAppId".withBaseUrl())
                 .get()
                 .build()
             val response = client.newCall(request).execute()
