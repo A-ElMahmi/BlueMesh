@@ -81,7 +81,6 @@ class BluetoothServer(private val context: Context) {
                 MessagingConnectionState.isPeer(bluetoothCentral.address)
             ) {
                 MessagingConnectionState.clear()
-                MessageBus.clear()
             }
             bleService.onCentralDisconnected(bluetoothCentral)
         }
@@ -138,7 +137,6 @@ class BluetoothServer(private val context: Context) {
             if (disconnectAfterNotification) {
                 disconnectAfterNotification = false
                 MessagingConnectionState.clear()
-                MessageBus.clear()
                 getConnectedCentral()?.let { peripheralManager.cancelConnection(it) }
             }
         }, 5_000)

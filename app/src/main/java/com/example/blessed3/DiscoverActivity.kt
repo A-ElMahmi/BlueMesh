@@ -3,10 +3,10 @@ package com.example.blessed3
 import android.bluetooth.BluetoothAdapter
 import android.content.Intent
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -25,7 +25,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -36,51 +35,22 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.Lifecycle
 import com.example.blessed3.ui.theme.Blessed3Theme
 import com.welie.blessed.BluetoothPeripheral
 import timber.log.Timber
 
 /**
  * Discover screen: scan for brand-new devices never chatted with before.
- * After a successful connection, ChatActivity is launched and this Activity
- * finishes so the back stack returns to MainActivity (Chats).
  */
 class DiscoverActivity : ComponentActivity() {
-    private var hasAutoLaunchedChat = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             Blessed3Theme {
-                val connectionState by MessagingConnectionState.state.collectAsState(initial = null)
-
-                LaunchedEffect(connectionState) {
-                    if (connectionState == null) {
-                        hasAutoLaunchedChat = false
-                        return@LaunchedEffect
-                    }
-                    if (!lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
-                        Timber.d("NAVDBG DiscoverActivity skip auto-launch (not RESUMED)")
-                        return@LaunchedEffect
-                    }
-                    if (hasAutoLaunchedChat) {
-                        Timber.d("NAVDBG DiscoverActivity skip duplicate auto-launch")
-                        return@LaunchedEffect
-                    }
-
-                    hasAutoLaunchedChat = true
-                    Timber.d("NAVDBG DiscoverActivity launching ChatActivity from LaunchedEffect")
-                    startActivity(
-                        Intent(this@DiscoverActivity, ChatActivity::class.java)
-                            .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                    )
-                    finish()
-                }
-
                 DeviceListScreen(
                     onScanClick = { restartScanning() },
-                    onConnectConfirmed = { peripheral -> connectToPeripheral(peripheral) }
+                    onConnectConfirmed = { peripheral -> openChatForPeripheral(peripheral) }
                 )
             }
         }
@@ -170,22 +140,36 @@ class DiscoverActivity : ComponentActivity() {
 
     private fun connectToManualId(appId: String) {
         KnownPeers.save(KnownPeer(appId = appId, displayName = appId, lastSeenMs = System.currentTimeMillis()))
-        Toast.makeText(this, "Peer saved. Scanning…", Toast.LENGTH_SHORT).show()
-        MessagingConnectionState.setConnectedAsInternet(appId, appId)
+        startActivity(
+            Intent(this, ChatActivity::class.java)
+                .putExtra(ChatActivity.EXTRA_PEER_APP_ID, appId)
+                .putExtra(ChatActivity.EXTRA_DISPLAY_NAME, appId)
+                .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        )
+        finish()
     }
 
-    // ── BLE helpers ────────────────────────────────────────────────────────────
-
-    private fun connectToPeripheral(peripheral: BluetoothPeripheral) {
-        BluetoothHandler.clearScannedDevices()
-        val cm = BluetoothHandler.centralManager
-        cm.stopScan()
-        if (cm.getConnectedPeripherals().any { it.address == peripheral.address } ||
-            cm.unconnectedPeripherals.containsKey(peripheral.address)
-        ) {
-            cm.cancelConnection(peripheral)
+    private fun openChatForPeripheral(peripheral: BluetoothPeripheral) {
+        val appId = BluetoothHandler.getAppIdForAddress(peripheral.address)
+        if (appId == null) {
+            Toast.makeText(this, "Could not read peer ID from scan data. Scan again.", Toast.LENGTH_LONG).show()
+            Timber.w("openChatForPeripheral: no appId for ${peripheral.address}")
+            return
         }
-        cm.connect(peripheral, BluetoothHandler.bluetoothPeripheralCallback)
+        KnownPeers.save(
+            KnownPeer(
+                appId = appId,
+                displayName = peripheral.name.ifBlank { appId },
+                lastSeenMs = System.currentTimeMillis()
+            )
+        )
+        startActivity(
+            Intent(this, ChatActivity::class.java)
+                .putExtra(ChatActivity.EXTRA_PEER_APP_ID, appId)
+                .putExtra(ChatActivity.EXTRA_DISPLAY_NAME, peripheral.name.ifBlank { appId })
+                .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        )
+        finish()
     }
 
     private fun restartScanning() {
@@ -220,5 +204,4 @@ class DiscoverActivity : ComponentActivity() {
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             if (result.resultCode == RESULT_OK) restartScanning()
         }
-
 }

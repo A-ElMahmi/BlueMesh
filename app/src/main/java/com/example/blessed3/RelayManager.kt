@@ -5,7 +5,6 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import android.widget.Toast
 import com.welie.blessed.BluetoothPeripheral
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -66,12 +65,12 @@ object RelayManager {
         seenMessageIds.add(packet.messageId)
 
         if (packet.destinationAppId == DeviceIdentity.appId) {
-            val name = KnownPeers.getAll()
-                .find { it.appId == packet.originAppId }?.displayName ?: packet.originAppId
-            Log.d(TAG, "onReceived → for us from $name (msgId=${packet.messageId})")
-            mainHandler.post {
-                Toast.makeText(context, "From $name: ${packet.content}", Toast.LENGTH_LONG).show()
-            }
+            Log.d(TAG, "onReceived → for us from ${packet.originAppId} (msgId=${packet.messageId})")
+            ChatHistoryRepository.appendInbound(
+                senderAppId = packet.originAppId,
+                text = packet.content,
+                dedupeKey = packet.messageId
+            )
             return
         }
 

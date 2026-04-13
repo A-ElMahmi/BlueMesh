@@ -74,8 +74,12 @@ internal class BleService(
         }
         Log.d("BleMsg", "PERIPHERAL recv type=${packet.type} body=\"${packet.body}\"")
         when (packet.type) {
-            BlePacket.TYPE_MSG ->
-                MessageBus.add(ChatMessage(packet.body, isFromMe = false))
+            BlePacket.TYPE_MSG -> {
+                val from = MessagingConnectionState.currentPeer?.peerAppId
+                if (from != null) {
+                    ChatHistoryRepository.appendInbound(from, packet.body, dedupeKey = null)
+                }
+            }
             BlePacket.TYPE_HANDSHAKE -> {
                 val centralAppId = packet.body
                 if (centralAppId.isNotEmpty()) {
@@ -99,7 +103,6 @@ internal class BleService(
             }
             BlePacket.TYPE_DISCONNECT -> {
                 MessagingConnectionState.clear()
-                MessageBus.clear()
             }
         }
         return GattStatus.SUCCESS

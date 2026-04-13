@@ -227,15 +227,18 @@ object BluetoothHandler {
                     }
                     Log.d("BleMsg", "CENTRAL recv type=${packet.type} body=\"${packet.body}\"")
                     when (packet.type) {
-                        BlePacket.TYPE_MSG ->
-                            MessageBus.add(ChatMessage(packet.body, isFromMe = false))
+                        BlePacket.TYPE_MSG -> {
+                            val from = MessagingConnectionState.currentPeer?.peerAppId
+                            if (from != null) {
+                                ChatHistoryRepository.appendInbound(from, packet.body, dedupeKey = null)
+                            }
+                        }
                         BlePacket.TYPE_RELAY -> {
                             val relay = RelayPacket.fromJson(packet.body)
                             if (relay != null) RelayManager.onReceived(relay)
                         }
                         BlePacket.TYPE_DISCONNECT -> {
                             MessagingConnectionState.clear()
-                            MessageBus.clear()
                         }
                     }
                 }
@@ -253,7 +256,6 @@ object BluetoothHandler {
             if (disconnectAfterWrite) {
                 disconnectAfterWrite = false
                 MessagingConnectionState.clear()
-                MessageBus.clear()
             }
         }
     }
@@ -274,6 +276,15 @@ object BluetoothHandler {
         centralManager.cancelConnection(peripheral)
     }
 
+    fun forceDisconnectCentral() {
+        val peer = MessagingConnectionState.currentPeer ?: return
+        if (peer.role != MessagingConnectionState.Role.WE_ARE_CENTRAL) return
+        val peripheral = centralManager.getConnectedPeripherals().find {
+            it.address.equals(peer.peerAddress, ignoreCase = true)
+        } ?: return
+        centralManager.cancelConnection(peripheral)
+    }
+
     // ── Central manager callback ───────────────────────────────────────────────
 
     private val bluetoothCentralManagerCallback = object : BluetoothCentralManagerCallback() {
@@ -282,7 +293,7 @@ object BluetoothHandler {
 
             val appId = extractAppId(scanResult)
             if (appId != null) {
-                addressToAppId[peripheral.address] = appId
+                addressToAppId[peripheral.address.uppercase()] = appId
             }
 
             // Feed relay scan accumulator when a relay scan is active
@@ -316,7 +327,7 @@ object BluetoothHandler {
             // Relay connections are handled entirely by relayPeripheralCallback — skip state
             if (peripheral.address.uppercase() in activeRelayJobs) return
 
-            val appId = addressToAppId[peripheral.address]
+            val appId = addressToAppId[peripheral.address.uppercase()]
             MessagingConnectionState.setConnectedAsCentral(
                 peerAddress = peripheral.address,
                 peerName = peripheral.name.ifBlank { "" },
@@ -333,7 +344,6 @@ object BluetoothHandler {
                 return
             }
             MessagingConnectionState.clearIfPeer(peripheral.address)
-            MessageBus.clear()
         }
 
         override fun onConnectionFailed(peripheral: BluetoothPeripheral, status: HciStatus) {
