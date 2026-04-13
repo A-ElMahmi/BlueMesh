@@ -140,6 +140,7 @@ object ChatTransportCoordinator {
 
     fun onUserSend(context: Context, peerAppId: String, text: String) {
         val id = peerAppId.lowercase()
+        ChatHistoryRepository.appendOutbound(id, text)
         synchronized(outboundQueue) { outboundQueue.add(text) }
         if (transportMatches(id, MessagingConnectionState.currentPeer)) {
             flushOutboundQueue(context.applicationContext)
@@ -179,7 +180,6 @@ object ChatTransportCoordinator {
                 synchronized(outboundQueue) { outboundQueue.add(0, text) }
                 break
             }
-            ChatHistoryRepository.appendOutbound(peerId, text)
             onAppPayloadActivity()
         }
     }

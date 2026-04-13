@@ -36,6 +36,12 @@ object ChatHistoryRepository {
             }
         }
 
+    /** Latest [ConversationMessageEntity] per peer (key = lowercase appId). */
+    fun latestMessagesByPeerFlow(): Flow<Map<String, ConversationMessageEntity>> =
+        dao.observeLatestMessagePerPeer().map { list ->
+            list.associateBy { it.peerAppId.lowercase() }
+        }
+
     fun appendOutbound(peerAppId: String, text: String, dedupeKey: String? = null) {
         scope.launch {
             if (!insertRow(peerAppId.lowercase(), text, fromMe = true, dedupeKey = dedupeKey)) return@launch

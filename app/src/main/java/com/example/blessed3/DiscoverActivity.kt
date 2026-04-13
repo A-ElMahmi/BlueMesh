@@ -15,15 +15,21 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -32,11 +38,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.lifecycleScope
+import com.example.blessed3.ui.theme.AppDarkGrey
 import com.example.blessed3.ui.theme.Blessed3Theme
 import com.welie.blessed.BluetoothPeripheral
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import timber.log.Timber
 
 /**
@@ -47,23 +60,65 @@ class DiscoverActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
+            var refreshCooldown by remember { mutableStateOf(false) }
             Blessed3Theme {
                 DeviceListScreen(
-                    onScanClick = { restartScanning() },
+                    refreshCooldown = refreshCooldown,
+                    onRefreshScan = {
+                        BluetoothHandler.stopScanning()
+                        BluetoothHandler.clearScannedDevices()
+                        refreshCooldown = true
+                        lifecycleScope.launch {
+                            delay(1_000)
+                            if (BluetoothHandler.centralManager.isBluetoothEnabled &&
+                                BluetoothHandler.centralManager.permissionsGranted()
+                            ) {
+                                BluetoothHandler.startScanning()
+                            }
+                            refreshCooldown = false
+                        }
+                    },
+                    onContinueManual = { id -> connectToManualId(id) },
                     onConnectConfirmed = { peripheral -> openChatForPeripheral(peripheral) }
                 )
             }
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        attemptAutoScan()
+    }
+
+    override fun onDestroy() {
+        BluetoothHandler.stopScanning()
+        super.onDestroy()
+    }
+
+    private fun attemptAutoScan() {
+        if (!BluetoothHandler.centralManager.isBluetoothEnabled) {
+            enableBleRequest.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
+            return
+        }
+        if (!BluetoothHandler.centralManager.permissionsGranted()) {
+            requestScanPermissions()
+            return
+        }
+        BluetoothHandler.clearScannedDevices()
+        BluetoothHandler.startScanning()
+    }
+
     @Composable
     private fun DeviceListScreen(
-        onScanClick: () -> Unit,
+        refreshCooldown: Boolean,
+        onRefreshScan: () -> Unit,
+        onContinueManual: (String) -> Unit,
         onConnectConfirmed: (BluetoothPeripheral) -> Unit
     ) {
         val devices by BluetoothHandler.scannedDevices.collectAsState()
         var pendingDevice by remember { mutableStateOf<BluetoothPeripheral?>(null) }
         var manualId by remember { mutableStateOf("") }
+        val canContinue = manualId.length == 8
 
         Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
             Text("Discover Devices", fontSize = 22.sp)
@@ -75,33 +130,88 @@ class DiscoverActivity : ComponentActivity() {
             )
             Spacer(modifier = Modifier.height(12.dp))
 
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                color = Color.White,
+                shadowElevation = 0.dp,
+                tonalElevation = 0.dp
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextField(
+                        value = manualId,
+                        onValueChange = { manualId = it.lowercase().filter { c -> c in '0'..'9' || c in 'a'..'f' }.take(8) },
+                        modifier = Modifier.weight(1f),
+                        placeholder = {
+                            Text("Peer ID", color = AppDarkGrey, fontSize = 16.sp)
+                        },
+                        singleLine = true,
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent,
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent,
+                            cursorColor = AppDarkGrey,
+                            focusedTextColor = Color.Black,
+                            unfocusedTextColor = Color.Black
+                        ),
+                        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 16.sp)
+                    )
+                    Text(
+                        text = "Continue",
+                        fontSize = 16.sp,
+                        color = if (canContinue) MaterialTheme.colorScheme.primary else AppDarkGrey,
+                        modifier = Modifier
+                            .clickable(enabled = canContinue) {
+                                if (canContinue) onContinueManual(manualId)
+                            }
+                            .padding(horizontal = 14.dp, vertical = 12.dp)
+                            .widthIn(min = 72.dp),
+                        textDecoration = TextDecoration.None
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                OutlinedTextField(
-                    value = manualId,
-                    onValueChange = { manualId = it.lowercase().filter { c -> c in '0'..'9' || c in 'a'..'f' }.take(8) },
-                    label = { Text("Peer ID") },
-                    placeholder = { Text("8-char hex") },
-                    singleLine = true,
+                Text(
+                    "Found devices (${devices.size}):",
+                    fontSize = 14.sp,
                     modifier = Modifier.weight(1f)
                 )
-                Spacer(modifier = Modifier.width(8.dp))
-                Button(
-                    onClick = { connectToManualId(manualId) },
-                    enabled = manualId.length == 8
+                IconButton(
+                    onClick = onRefreshScan,
+                    enabled = !refreshCooldown
                 ) {
-                    Text("Connect")
+                    Icon(
+                        painter = painterResource(R.drawable.refresh_24dp_303030_fill0_wght400_grad0_opsz24),
+                        contentDescription = "Refresh scan",
+                        tint = if (refreshCooldown) AppDarkGrey.copy(alpha = 0.4f) else Color.Black
+                    )
                 }
             }
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Button(onClick = onScanClick, modifier = Modifier.fillMaxWidth()) {
-                Text("Scan")
+            if (refreshCooldown) {
+                LinearProgressIndicator(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = AppDarkGrey.copy(alpha = 0.12f)
+                )
+                Text(
+                    text = "Scanning…",
+                    fontSize = 12.sp,
+                    color = AppDarkGrey,
+                    modifier = Modifier.padding(top = 6.dp)
+                )
             }
-            Spacer(modifier = Modifier.height(8.dp))
-            Text("Found devices (${devices.size}):", fontSize = 14.sp)
             Spacer(modifier = Modifier.height(4.dp))
 
             LazyColumn(modifier = Modifier.fillMaxSize()) {
@@ -172,19 +282,6 @@ class DiscoverActivity : ComponentActivity() {
         finish()
     }
 
-    private fun restartScanning() {
-        if (!BluetoothHandler.centralManager.isBluetoothEnabled) {
-            enableBleRequest.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
-            return
-        }
-        if (BluetoothHandler.centralManager.permissionsGranted()) {
-            BluetoothHandler.clearScannedDevices()
-            BluetoothHandler.startScanning()
-        } else {
-            requestScanPermissions()
-        }
-    }
-
     private fun requestScanPermissions() {
         val missing = BluetoothHandler.centralManager.getMissingPermissions()
         if (missing.isNotEmpty() && !permissionRequestInProgress) {
@@ -198,10 +295,13 @@ class DiscoverActivity : ComponentActivity() {
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
             permissionRequestInProgress = false
             permissions.entries.forEach { Timber.d("Permission ${it.key} = ${it.value}") }
+            if (permissions.values.all { it }) {
+                attemptAutoScan()
+            }
         }
 
     private val enableBleRequest =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-            if (result.resultCode == RESULT_OK) restartScanning()
+            if (result.resultCode == RESULT_OK) attemptAutoScan()
         }
 }
