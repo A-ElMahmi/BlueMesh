@@ -54,13 +54,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.lifecycleScope
 import com.example.blessed3.ui.theme.AppDarkGrey
 import com.example.blessed3.ui.theme.AppLightGrey
 import com.example.blessed3.ui.theme.Blessed3Theme
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.time.Instant
 import java.time.LocalDate
@@ -70,7 +66,6 @@ import java.util.Locale
 
 class MainActivity : ComponentActivity() {
     private val handler = Handler(Looper.getMainLooper())
-    private var pollingJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -365,32 +360,6 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         Timber.d("NAVDBG MainActivity.onResume taskId=$taskId instance=${System.identityHashCode(this)}")
         startAdvertising()
-        startPollingIfOnline()
-    }
-
-    override fun onPause() {
-        super.onPause()
-        pollingJob?.cancel()
-        pollingJob = null
-        BluetoothHandler.cancelScanForPeer()
-    }
-
-    private fun startPollingIfOnline() {
-        if (!NetworkUtils.hasInternet(this)) return
-        pollingJob = lifecycleScope.launch {
-            while (true) {
-                delay(15_000)
-                val messages = ServerClient.pollMessages(DeviceIdentity.appId)
-                messages.forEach { msg ->
-                    ChatHistoryRepository.appendInbound(
-                        senderAppId = msg.from,
-                        text = msg.content,
-                        dedupeKey = msg.messageId
-                    )
-                }
-                RelayManager.deliverPendingFromServer()
-            }
-        }
     }
 
     private fun startAdvertising() {

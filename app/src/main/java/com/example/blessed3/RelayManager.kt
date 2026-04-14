@@ -46,7 +46,7 @@ object RelayManager {
         val packet = RelayPacket(
             messageId = messageId,
             originAppId = DeviceIdentity.appId,
-            destinationAppId = destinationAppId,
+            destinationAppId = destinationAppId.lowercase(),
             content = content
         )
         val bleBytes = BlePacket(BlePacket.TYPE_RELAY, packet.toJson()).toBytes()
@@ -64,7 +64,7 @@ object RelayManager {
         if (packet.messageId in seenMessageIds) return
         seenMessageIds.add(packet.messageId)
 
-        if (packet.destinationAppId == DeviceIdentity.appId) {
+        if (packet.destinationAppId.lowercase() == DeviceIdentity.appId.lowercase()) {
             Log.d(TAG, "onReceived → for us from ${packet.originAppId} (msgId=${packet.messageId})")
             ChatHistoryRepository.appendInbound(
                 senderAppId = packet.originAppId,

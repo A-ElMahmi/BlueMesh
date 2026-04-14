@@ -12,5 +12,6 @@ class BlessedApp : Application() {
         BluetoothHandler.initialize(applicationContext)
         RelayManager.initialize(applicationContext)
         ChatTransportCoordinator.initialize(this)
+        ForegroundServerPoller.start(this)
     }
 }

@@ -63,7 +63,9 @@ object ChatTransportCoordinator {
         val s = MessagingConnectionState.currentPeer
         if (!transportMatches(id, s)) return "Not connected"
         return when (s!!.role) {
-            MessagingConnectionState.Role.WE_ARE_INTERNET -> "Connected via Wi‑Fi"
+            MessagingConnectionState.Role.WE_ARE_INTERNET ->
+                if (NetworkUtils.hasInternet(appContext)) "Connected via Wi‑Fi"
+                else "Connected via relay (no Wi‑Fi)"
             MessagingConnectionState.Role.WE_ARE_CENTRAL,
             MessagingConnectionState.Role.WE_ARE_PERIPHERAL ->
                 if (s.peerAppId == null) "Connecting…" else "Connected via BLE"
@@ -73,8 +75,15 @@ object ChatTransportCoordinator {
     fun startSession(peerAppId: String, displayName: String) {
         val id = peerAppId.lowercase()
         activeSessionPeerId = id
-        _scanning.value = true
         BluetoothHandler.cancelScanForPeer()
+        // Step 1: online → server route immediately (no BLE scan delay).
+        if (NetworkUtils.hasInternet(appContext)) {
+            _scanning.value = false
+            MessagingConnectionState.setConnectedAsInternet(id, displayName)
+            return
+        }
+        // Steps 2–3 offline: try direct BLE to destination; on timeout arm relay session (send → [RelayManager.flood]).
+        _scanning.value = true
         BluetoothHandler.scanForPeer(
             appId = id,
             onFound = { peripheral ->
@@ -83,9 +92,7 @@ object ChatTransportCoordinator {
             },
             onNotFound = {
                 _scanning.value = false
-                if (NetworkUtils.hasInternet(appContext)) {
-                    MessagingConnectionState.setConnectedAsInternet(id, displayName)
-                }
+                MessagingConnectionState.setConnectedAsInternet(id, displayName)
             }
         )
     }
@@ -159,11 +166,9 @@ object ChatTransportCoordinator {
             },
             onNotFound = {
                 _scanning.value = false
-                if (NetworkUtils.hasInternet(context)) {
-                    val name = KnownPeers.getAll().find { it.appId == id }?.displayName ?: id
-                    MessagingConnectionState.setConnectedAsInternet(id, name)
-                    flushOutboundQueue(context.applicationContext)
-                }
+                val name = KnownPeers.getAll().find { it.appId == id }?.displayName ?: id
+                MessagingConnectionState.setConnectedAsInternet(id, name)
+                flushOutboundQueue(context.applicationContext)
             }
         )
     }
