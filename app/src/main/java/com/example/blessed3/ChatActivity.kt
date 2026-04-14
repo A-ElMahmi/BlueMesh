@@ -135,7 +135,9 @@ class ChatActivity : ComponentActivity() {
                         "Not connected"
                     } else {
                         when (s!!.role) {
-                            MessagingConnectionState.Role.WE_ARE_INTERNET -> "Connected via Wi‑Fi"
+                            MessagingConnectionState.Role.WE_ARE_INTERNET ->
+                                if (NetworkUtils.hasInternet(this@ChatActivity)) "Connected via Wi‑Fi"
+                                else "Connected via relay (no Wi‑Fi)"
                             MessagingConnectionState.Role.WE_ARE_CENTRAL,
                             MessagingConnectionState.Role.WE_ARE_PERIPHERAL ->
                                 if (s.peerAppId == null) "Connecting…" else "Connected via BLE"
