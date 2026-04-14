@@ -7,6 +7,9 @@ class BlessedApp : Application() {
     override fun onCreate() {
         super.onCreate()
         DeviceIdentity.initialize(applicationContext)
+        PeerPublicKeyStore.initialize(applicationContext)
+        E2eeIdentity.initialize(applicationContext)
+        com.google.crypto.tink.config.TinkConfig.register()
         KnownPeers.initialize(applicationContext)
         ChatHistoryRepository.initialize(AppDatabase.build(this))
         BluetoothHandler.initialize(applicationContext)

@@ -24,6 +24,9 @@ object ChatTransportCoordinator {
 
     private val outboundQueue = Collections.synchronizedList(mutableListOf<String>())
 
+    /** Per-peer: only one in-band key announce while waiting for their key (internet/relay). */
+    private val keyAnnounceSentWhileWaiting = Collections.synchronizedSet(mutableSetOf<String>())
+
     @Volatile
     private var activeSessionPeerId: String? = null
 
@@ -41,6 +44,13 @@ object ChatTransportCoordinator {
                 flushOutboundQueue(appContext)
             }
         }
+    }
+
+    /** Call when a peer's public key is first stored so queued plaintext can encrypt and send. */
+    fun onPeerPublicKeyLearned() {
+        if (!::appContext.isInitialized) return
+        activeSessionPeerId?.let { keyAnnounceSentWhileWaiting.remove(it.lowercase()) }
+        scope.launch { flushOutboundQueue(appContext) }
     }
 
     fun transportMatches(peerAppId: String, s: MessagingConnectionState.Connected?): Boolean {
@@ -114,6 +124,7 @@ object ChatTransportCoordinator {
         val id = peerAppId.lowercase()
         if (activeSessionPeerId == id) {
             synchronized(outboundQueue) { outboundQueue.clear() }
+            keyAnnounceSentWhileWaiting.remove(id.lowercase())
             BluetoothHandler.cancelScanForPeer()
             teardownTransportForPeer(id)
             activeSessionPeerId = null
@@ -147,7 +158,6 @@ object ChatTransportCoordinator {
 
     fun onUserSend(context: Context, peerAppId: String, text: String) {
         val id = peerAppId.lowercase()
-        ChatHistoryRepository.appendOutbound(id, text)
         synchronized(outboundQueue) { outboundQueue.add(text) }
         if (transportMatches(id, MessagingConnectionState.currentPeer)) {
             flushOutboundQueue(context.applicationContext)
@@ -177,14 +187,29 @@ object ChatTransportCoordinator {
         val peerId = activeSessionPeerId ?: return
         if (!transportMatches(peerId, MessagingConnectionState.currentPeer)) return
         while (true) {
-            val text = synchronized(outboundQueue) {
+            val plain = synchronized(outboundQueue) {
                 if (outboundQueue.isEmpty()) null else outboundQueue.removeAt(0)
             } ?: break
-            val ok = BleMessaging.sendTransport(context, text)
-            if (!ok) {
-                synchronized(outboundQueue) { outboundQueue.add(0, text) }
+            if (!ChatPayloadCrypto.hasPeerPublicKey(peerId)) {
+                val role = MessagingConnectionState.currentPeer?.role
+                if (role == MessagingConnectionState.Role.WE_ARE_INTERNET &&
+                    keyAnnounceSentWhileWaiting.add(peerId.lowercase())
+                ) {
+                    BleMessaging.trySendKeyAnnounce(context)
+                }
+                synchronized(outboundQueue) { outboundQueue.add(0, plain) }
                 break
             }
+            val wire = ChatPayloadCrypto.encryptForPeer(peerId, plain)
+            if (wire == null) {
+                synchronized(outboundQueue) { outboundQueue.add(0, plain) }
+                break
+            }
+            if (!BleMessaging.sendTransport(context, wire)) {
+                synchronized(outboundQueue) { outboundQueue.add(0, plain) }
+                break
+            }
+            ChatHistoryRepository.appendOutboundCipher(peerId, wire)
             onAppPayloadActivity()
         }
     }
