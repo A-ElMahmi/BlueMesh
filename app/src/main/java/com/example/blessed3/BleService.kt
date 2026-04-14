@@ -72,16 +72,20 @@ internal class BleService(
             Log.d("BleMsg", "PERIPHERAL recv: failed to parse packet (${value.size} bytes)")
             return GattStatus.SUCCESS
         }
-        Log.d("BleMsg", "PERIPHERAL recv type=${packet.type} body=\"${packet.body}\"")
+        Log.d("BleMsg", "PERIPHERAL recv type=${packet.type} bodyLen=${packet.body.length}")
         when (packet.type) {
             BlePacket.TYPE_MSG -> {
                 val from = MessagingConnectionState.currentPeer?.peerAppId
                 if (from != null) {
-                    ChatHistoryRepository.appendInbound(from, packet.body, dedupeKey = null)
+                    ChatInboundDispatch.dispatch(from, packet.body, dedupeKey = null)
                 }
             }
             BlePacket.TYPE_HANDSHAKE -> {
-                val centralAppId = packet.body
+                val parsed = HandshakePayload.parse(packet.body) ?: return GattStatus.SUCCESS
+                val centralAppId = parsed.appId
+                if (ChatPayloadCrypto.mergePeerPublicKey(centralAppId, parsed.publicKeySpkiBase64)) {
+                    ChatTransportCoordinator.onPeerPublicKeyLearned()
+                }
                 if (centralAppId.isNotEmpty()) {
                     MessagingConnectionState.setConnectedAsPeripheral(
                         centralAddress = central.address,
@@ -94,6 +98,12 @@ internal class BleService(
                             displayName = central.name.ifBlank { centralAppId },
                             lastSeenMs = System.currentTimeMillis()
                         )
+                    )
+                    val reply = HandshakePayload.toJson(DeviceIdentity.appId, E2eeIdentity.publicKeySpkiBase64())
+                    notifyCharacteristicChanged(
+                        BlePacket(BlePacket.TYPE_HANDSHAKE, reply).toBytes(),
+                        central,
+                        measurement
                     )
                 }
             }
