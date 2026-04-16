@@ -66,9 +66,9 @@ object RelayManager {
 
         if (packet.destinationAppId.lowercase() == DeviceIdentity.appId.lowercase()) {
             Log.d(TAG, "onReceived → for us from ${packet.originAppId} (msgId=${packet.messageId})")
-            ChatInboundDispatch.dispatch(
+            ChatHistoryRepository.appendInbound(
                 senderAppId = packet.originAppId,
-                body = packet.content,
+                text = packet.content,
                 dedupeKey = packet.messageId
             )
             return
