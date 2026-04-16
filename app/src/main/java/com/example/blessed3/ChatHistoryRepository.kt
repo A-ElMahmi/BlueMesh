@@ -7,7 +7,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -26,38 +25,28 @@ object ChatHistoryRepository {
     }
 
     fun messagesForPeer(peerAppId: String): Flow<List<ChatMessage>> =
-        dao.observeForPeer(peerAppId.lowercase())
-            .map { rows ->
-                val peer = peerAppId.lowercase()
-                rows.map { e ->
-                    ChatMessage(
-                        id = e.messageId,
-                        text = displayTextForPeer(peer, e.text, e.fromMe),
-                        isFromMe = e.fromMe,
-                        timestampMs = e.timestampMs
-                    )
-                }
+        dao.observeForPeer(peerAppId.lowercase()).map { rows ->
+            rows.map { e ->
+                ChatMessage(
+                    id = e.messageId,
+                    text = e.text,
+                    isFromMe = e.fromMe,
+                    timestampMs = e.timestampMs
+                )
             }
-            .flowOn(Dispatchers.Default)
-
-    /** Decrypt for list preview / bubbles. */
-    fun displayTextForPeer(peerAppId: String, stored: String, fromMe: Boolean): String {
-        val peer = peerAppId.lowercase()
-        ChatPayloadCrypto.decryptFromPeer(peer, stored)?.let { return it }
-        return if (E2eeWireFormat.isEncryptedMessage(stored)) "…" else stored
-    }
-
-    fun appendOutboundCipher(peerAppId: String, ciphertext: String, dedupeKey: String? = null) {
-        scope.launch {
-            insertRow(peerAppId.lowercase(), ciphertext, fromMe = true, dedupeKey = dedupeKey)
         }
-    }
 
     /** Latest [ConversationMessageEntity] per peer (key = lowercase appId). */
     fun latestMessagesByPeerFlow(): Flow<Map<String, ConversationMessageEntity>> =
         dao.observeLatestMessagePerPeer().map { list ->
             list.associateBy { it.peerAppId.lowercase() }
         }
+
+    fun appendOutbound(peerAppId: String, text: String, dedupeKey: String? = null) {
+        scope.launch {
+            if (!insertRow(peerAppId.lowercase(), text, fromMe = true, dedupeKey = dedupeKey)) return@launch
+        }
+    }
 
     /**
      * Inbound from any transport. Increments unread unless [ActiveChatPeer] matches [senderAppId].

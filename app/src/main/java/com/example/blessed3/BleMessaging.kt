@@ -20,19 +20,18 @@ object BleMessaging {
 
     /**
      * Sends one chat payload on the current [MessagingConnectionState] link. Returns false if no link.
-     * [payload] is ciphertext or key-announce wire string (never user plaintext on the wire).
      */
-    fun sendTransport(context: Context, payload: String): Boolean {
+    fun sendTransport(context: Context, text: String): Boolean {
         val peer = MessagingConnectionState.currentPeer ?: run {
             Log.d(TAG, "sendTransport: no current peer")
             return false
         }
-        Log.d(TAG, "sendTransport [${peer.role}] len=${payload.length}")
+        Log.d(TAG, "sendTransport [${peer.role}] \"$text\"")
         when (peer.role) {
             MessagingConnectionState.Role.WE_ARE_CENTRAL ->
-                BluetoothHandler.sendBytes(BlePacket(BlePacket.TYPE_MSG, payload).toBytes())
+                BluetoothHandler.sendBytes(BlePacket(BlePacket.TYPE_MSG, text).toBytes())
             MessagingConnectionState.Role.WE_ARE_PERIPHERAL ->
-                BluetoothServer.getInstance(context).sendBytes(BlePacket(BlePacket.TYPE_MSG, payload).toBytes())
+                BluetoothServer.getInstance(context).sendBytes(BlePacket(BlePacket.TYPE_MSG, text).toBytes())
             MessagingConnectionState.Role.WE_ARE_INTERNET -> {
                 val destAppId = peer.peerAppId ?: run {
                     Log.d(TAG, "sendTransport internet: peerAppId null")
@@ -41,36 +40,9 @@ object BleMessaging {
                 val msgId = UUID.randomUUID().toString()
                 scope.launch {
                     if (NetworkUtils.hasInternet(context)) {
-                        ServerClient.postMessage(msgId, DeviceIdentity.appId, destAppId, payload)
+                        ServerClient.postMessage(msgId, DeviceIdentity.appId, destAppId, text)
                     } else {
-                        RelayManager.flood(destAppId, payload, msgId)
-                    }
-                }
-            }
-        }
-        return true
-    }
-
-    /** Announces our long-term public key: BLE uses [BlePacket.TYPE_HANDSHAKE] JSON; server/relay use [E2eeWireFormat.KEY_ANNOUNCE_PREFIX]. */
-    fun trySendKeyAnnounce(context: Context): Boolean {
-        val peer = MessagingConnectionState.currentPeer ?: return false
-        val handshakeJson = HandshakePayload.toJson(DeviceIdentity.appId, E2eeIdentity.publicKeySpkiBase64())
-        when (peer.role) {
-            MessagingConnectionState.Role.WE_ARE_CENTRAL ->
-                BluetoothHandler.sendBytes(BlePacket(BlePacket.TYPE_HANDSHAKE, handshakeJson).toBytes())
-            MessagingConnectionState.Role.WE_ARE_PERIPHERAL ->
-                BluetoothServer.getInstance(context).sendBytes(
-                    BlePacket(BlePacket.TYPE_HANDSHAKE, handshakeJson).toBytes()
-                )
-            MessagingConnectionState.Role.WE_ARE_INTERNET -> {
-                val dest = peer.peerAppId ?: return false
-                val wire = ChatPayloadCrypto.buildKeyAnnounceWire()
-                val msgId = UUID.randomUUID().toString()
-                scope.launch {
-                    if (NetworkUtils.hasInternet(context)) {
-                        ServerClient.postMessage(msgId, DeviceIdentity.appId, dest, wire)
-                    } else {
-                        RelayManager.flood(dest, wire, msgId)
+                        RelayManager.flood(destAppId, text, msgId)
                     }
                 }
             }

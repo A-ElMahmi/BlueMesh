@@ -37,9 +37,9 @@ object ForegroundServerPoller {
     private suspend fun pollOnce() {
         val messages = ServerClient.pollMessages(DeviceIdentity.appId)
         messages.forEach { msg ->
-            ChatInboundDispatch.dispatch(
+            ChatHistoryRepository.appendInbound(
                 senderAppId = msg.from,
-                body = msg.content,
+                text = msg.content,
                 dedupeKey = msg.messageId
             )
         }

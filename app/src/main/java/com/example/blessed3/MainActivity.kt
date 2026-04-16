@@ -231,12 +231,7 @@ class MainActivity : ComponentActivity() {
                         items(filteredPeers, key = { it.appId }) { peer ->
                             val last = latestByPeer[peer.appId.lowercase()]
                             val previewRaw = last?.let { m ->
-                                val shown = ChatHistoryRepository.displayTextForPeer(
-                                    peer.appId,
-                                    m.text,
-                                    m.fromMe
-                                )
-                                if (m.fromMe) "You: $shown" else shown
+                                if (m.fromMe) "You: ${m.text}" else m.text
                             }
                             val preview = if (previewRaw.isNullOrBlank()) {
                                 "No messages yet"

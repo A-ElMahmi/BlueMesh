@@ -182,8 +182,7 @@ object BluetoothHandler {
             peripheral.requestConnectionPriority(ConnectionPriority.HIGH)
             peripheral.requestMtu(512)
             peripheral.startNotify(BleService.SERVICE_UUID, BleService.MEASUREMENT_CHARACTERISTIC_UUID)
-            val handshakeBody = HandshakePayload.toJson(DeviceIdentity.appId, E2eeIdentity.publicKeySpkiBase64())
-            val handshake = BlePacket(BlePacket.TYPE_HANDSHAKE, handshakeBody).toBytes()
+            val handshake = BlePacket(BlePacket.TYPE_HANDSHAKE, DeviceIdentity.appId).toBytes()
             peripheral.writeCharacteristic(BleService.SERVICE_UUID, BleService.MEASUREMENT_CHARACTERISTIC_UUID, handshake, WITH_RESPONSE)
         }
 
@@ -226,21 +225,12 @@ object BluetoothHandler {
                         Log.d("BleMsg", "CENTRAL recv: failed to parse packet")
                         return
                     }
-                    Log.d("BleMsg", "CENTRAL recv type=${packet.type} bodyLen=${packet.body.length}")
+                    Log.d("BleMsg", "CENTRAL recv type=${packet.type} body=\"${packet.body}\"")
                     when (packet.type) {
-                        BlePacket.TYPE_HANDSHAKE -> {
-                            val parsed = HandshakePayload.parse(packet.body) ?: return
-                            val peerId = MessagingConnectionState.currentPeer?.peerAppId?.lowercase()
-                            if (peerId != null && peerId == parsed.appId) {
-                                if (ChatPayloadCrypto.mergePeerPublicKey(peerId, parsed.publicKeySpkiBase64)) {
-                                    ChatTransportCoordinator.onPeerPublicKeyLearned()
-                                }
-                            }
-                        }
                         BlePacket.TYPE_MSG -> {
                             val from = MessagingConnectionState.currentPeer?.peerAppId
                             if (from != null) {
-                                ChatInboundDispatch.dispatch(from, packet.body, dedupeKey = null)
+                                ChatHistoryRepository.appendInbound(from, packet.body, dedupeKey = null)
                             }
                         }
                         BlePacket.TYPE_RELAY -> {
