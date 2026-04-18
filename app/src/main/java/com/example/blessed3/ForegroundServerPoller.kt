@@ -17,19 +17,28 @@ import kotlinx.coroutines.launch
 object ForegroundServerPoller {
 
     private const val TAG = "ServerPoll"
-    private const val INTERVAL_MS = 15_000L
+    private const val INTERVAL_MS = 3_000L
 
     fun start(app: Application) {
         val owner = ProcessLifecycleOwner.get()
+        Log.d(TAG, "ForegroundServerPoller.start() scheduled (interval=${INTERVAL_MS}ms)")
         owner.lifecycleScope.launch {
             owner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                Log.d(TAG, "process STARTED → poll loop active")
                 while (isActive) {
-                    if (NetworkUtils.hasInternet(app)) {
+                    val online = NetworkUtils.hasInternet(app)
+                    val id = DeviceIdentity.appId
+                    if (!online) {
+                        Log.d(TAG, "skip tick: no internet (appId=$id)")
+                    } else if (id.isBlank()) {
+                        Log.w(TAG, "skip tick: appId not initialised")
+                    } else {
                         runCatching { pollOnce() }
                             .onFailure { e -> Log.w(TAG, "poll failed", e) }
                     }
                     delay(INTERVAL_MS)
                 }
+                Log.d(TAG, "process STOPPED → poll loop paused")
             }
         }
     }
