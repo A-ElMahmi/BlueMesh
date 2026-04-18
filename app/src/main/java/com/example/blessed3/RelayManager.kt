@@ -54,7 +54,7 @@ object RelayManager {
         BluetoothHandler.scanForRelayNeighbors { neighbors ->
             val targets = neighbors.map { it.first }
             Log.d(TAG, "flood found ${targets.size} neighbor(s)")
-            connectSequentially(targets, bleBytes)
+            connect(targets, bleBytes)
         }
     }
 
@@ -122,7 +122,7 @@ object RelayManager {
 
     // ── Sequential BLE delivery helpers ─────────────────────────────────────
 
-    private fun connectSequentially(peripherals: List<BluetoothPeripheral>, bytes: ByteArray) {
+    private fun connect(peripherals: List<BluetoothPeripheral>, bytes: ByteArray) {
         if (peripherals.isEmpty()) return
         val queue = ArrayDeque(peripherals)
 

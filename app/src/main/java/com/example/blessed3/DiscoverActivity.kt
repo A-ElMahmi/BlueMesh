@@ -46,7 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
 import com.example.blessed3.ui.theme.AppDarkGrey
-import com.example.blessed3.ui.theme.Blessed3Theme
+import com.example.blessed3.ui.theme.BlueMesh3Theme
 import com.welie.blessed.BluetoothPeripheral
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
@@ -61,7 +61,7 @@ class DiscoverActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             var refreshCooldown by remember { mutableStateOf(false) }
-            Blessed3Theme {
+            BlueMesh3Theme {
                 DeviceListScreen(
                     refreshCooldown = refreshCooldown,
                     onRefreshScan = {

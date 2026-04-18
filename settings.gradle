@@ -15,7 +15,6 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "Blessed3"
+rootProject.name = "BlueMesh3"
 include ':app'
-include ':peripheral'
 include ':blessed'

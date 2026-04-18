@@ -49,7 +49,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.blessed3.ui.theme.AppDarkGrey
-import com.example.blessed3.ui.theme.Blessed3Theme
+import com.example.blessed3.ui.theme.BlueMesh3Theme
 import com.example.blessed3.ui.theme.TheirMessageBubble
 import timber.log.Timber
 import java.time.Instant
@@ -89,7 +89,7 @@ class ChatActivity : ComponentActivity() {
         ChatTransportCoordinator.startSession(peerAppId, displayName)
 
         setContent {
-            Blessed3Theme {
+            BlueMesh3Theme {
                 ChatScreen(peerAppId = peerAppId, onBack = { finish() })
             }
         }

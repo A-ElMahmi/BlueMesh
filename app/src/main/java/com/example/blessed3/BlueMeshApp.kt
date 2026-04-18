@@ -3,7 +3,7 @@ package com.example.blessed3
 import android.app.Application
 import com.example.blessed3.db.AppDatabase
 
-class BlessedApp : Application() {
+class BlueMeshApp : Application() {
     override fun onCreate() {
         super.onCreate()
         DeviceIdentity.initialize(applicationContext)

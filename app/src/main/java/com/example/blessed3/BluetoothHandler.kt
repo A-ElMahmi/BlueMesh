@@ -36,7 +36,7 @@ object BluetoothHandler {
 
     private lateinit var context: Context
 
-    private val handlerThread = HandlerThread("Blessed", Process.THREAD_PRIORITY_DEFAULT)
+    private val handlerThread = HandlerThread("BlueMesh", Process.THREAD_PRIORITY_DEFAULT)
     private lateinit var handler: Handler
 
     lateinit var centralManager: BluetoothCentralManager

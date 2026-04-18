@@ -56,7 +56,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.blessed3.ui.theme.AppDarkGrey
 import com.example.blessed3.ui.theme.AppLightGrey
-import com.example.blessed3.ui.theme.Blessed3Theme
+import com.example.blessed3.ui.theme.BlueMesh3Theme
 import timber.log.Timber
 import java.time.Instant
 import java.time.LocalDate
@@ -71,7 +71,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         Timber.d("NAVDBG MainActivity.onCreate taskId=$taskId instance=${System.identityHashCode(this)}")
         setContent {
-            Blessed3Theme {
+            BlueMesh3Theme {
                 ChatsScreen()
             }
         }
