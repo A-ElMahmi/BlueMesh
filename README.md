@@ -8,7 +8,11 @@ End-to-end encrypted. One-to-one. Works offline.
 
 ## Screenshots
 
-
+<p align="center">
+  <img src="screenshots/main_screen.jpg" alt="Chat list" width="30%" />
+  <img src="screenshots/conversation_screen.jpg" alt="Chat screen" width="30%" />
+  <img src="screenshots/device_discover_screen.jpg" alt="Device discovery" width="30%" />
+</p>
 
 ---
 
