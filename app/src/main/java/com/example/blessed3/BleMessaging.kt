@@ -39,7 +39,7 @@ object BleMessaging {
                 }
                 val msgId = UUID.randomUUID().toString()
                 scope.launch {
-                    if (NetworkUtils.hasInternet(context)) {
+                    if (NetworkUtils.hasInternet(context) && ServerClient.serverReachable.value) {
                         ServerClient.postMessage(msgId, DeviceIdentity.appId, destAppId, text)
                     } else {
                         RelayManager.flood(destAppId, text, msgId)

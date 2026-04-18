@@ -74,7 +74,7 @@ object RelayManager {
             return
         }
 
-        if (NetworkUtils.hasInternet(context)) {
+        if (NetworkUtils.hasInternet(context) && ServerClient.serverReachable.value) {
             Log.d(TAG, "onReceived → forwarding to server (msgId=${packet.messageId})")
             scope.launch {
                 ServerClient.postMessage(
@@ -85,7 +85,8 @@ object RelayManager {
                 )
             }
         } else {
-            Log.d(TAG, "onReceived → dropped (no internet, msgId=${packet.messageId})")
+            Log.d(TAG, "onReceived → server unavailable, BLE relay (msgId=${packet.messageId})")
+            flood(packet.destinationAppId, packet.content, packet.messageId)
         }
     }
 

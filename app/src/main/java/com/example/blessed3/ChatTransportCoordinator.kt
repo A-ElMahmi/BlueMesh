@@ -64,8 +64,11 @@ object ChatTransportCoordinator {
         if (!transportMatches(id, s)) return "Not connected"
         return when (s!!.role) {
             MessagingConnectionState.Role.WE_ARE_INTERNET ->
-                if (NetworkUtils.hasInternet(appContext)) "Connected via Wi‑Fi"
-                else "Connected via relay (no Wi‑Fi)"
+                when {
+                    !NetworkUtils.hasInternet(appContext) -> "Not connected"
+                    !ServerClient.serverReachable.value -> "Not connected"
+                    else -> "Connected via Wi‑Fi"
+                }
             MessagingConnectionState.Role.WE_ARE_CENTRAL,
             MessagingConnectionState.Role.WE_ARE_PERIPHERAL ->
                 if (s.peerAppId == null) "Connecting…" else "Connected via BLE"
@@ -76,25 +79,27 @@ object ChatTransportCoordinator {
         val id = peerAppId.lowercase()
         activeSessionPeerId = id
         BluetoothHandler.cancelScanForPeer()
-        // Step 1: online → server route immediately (no BLE scan delay).
-        if (NetworkUtils.hasInternet(appContext)) {
-            _scanning.value = false
-            MessagingConnectionState.setConnectedAsInternet(id, displayName)
-            return
-        }
-        // Steps 2–3 offline: try direct BLE to destination; on timeout arm relay session (send → [RelayManager.flood]).
-        _scanning.value = true
-        BluetoothHandler.scanForPeer(
-            appId = id,
-            onFound = { peripheral ->
-                _scanning.value = false
-                connectToPeripheral(peripheral)
-            },
-            onNotFound = {
+        scope.launch {
+            // Prefer server route only when the backend actually responds (not just link-local "internet").
+            if (ServerClient.isChatServerReachable(appContext)) {
                 _scanning.value = false
                 MessagingConnectionState.setConnectedAsInternet(id, displayName)
+                return@launch
             }
-        )
+            // No working server: try direct BLE; on scan timeout still arm relay/internet state for flood path.
+            _scanning.value = true
+            BluetoothHandler.scanForPeer(
+                appId = id,
+                onFound = { peripheral ->
+                    _scanning.value = false
+                    connectToPeripheral(peripheral)
+                },
+                onNotFound = {
+                    _scanning.value = false
+                    MessagingConnectionState.setConnectedAsInternet(id, displayName)
+                }
+            )
+        }
     }
 
     private fun connectToPeripheral(peripheral: BluetoothPeripheral) {
@@ -156,21 +161,31 @@ object ChatTransportCoordinator {
         if (MessagingConnectionState.currentPeer != null) {
             teardownAllTransport()
         }
-        _scanning.value = true
+        val appCtx = context.applicationContext
         BluetoothHandler.cancelScanForPeer()
-        BluetoothHandler.scanForPeer(
-            appId = id,
-            onFound = { peripheral ->
-                _scanning.value = false
-                connectToPeripheral(peripheral)
-            },
-            onNotFound = {
-                _scanning.value = false
+        scope.launch {
+            if (ServerClient.isChatServerReachable(appCtx)) {
                 val name = KnownPeers.getAll().find { it.appId == id }?.displayName ?: id
+                _scanning.value = false
                 MessagingConnectionState.setConnectedAsInternet(id, name)
-                flushOutboundQueue(context.applicationContext)
+                flushOutboundQueue(appCtx)
+                return@launch
             }
-        )
+            _scanning.value = true
+            BluetoothHandler.scanForPeer(
+                appId = id,
+                onFound = { peripheral ->
+                    _scanning.value = false
+                    connectToPeripheral(peripheral)
+                },
+                onNotFound = {
+                    _scanning.value = false
+                    val name = KnownPeers.getAll().find { it.appId == id }?.displayName ?: id
+                    MessagingConnectionState.setConnectedAsInternet(id, name)
+                    flushOutboundQueue(appCtx)
+                }
+            )
+        }
     }
 
     private fun flushOutboundQueue(context: Context) {

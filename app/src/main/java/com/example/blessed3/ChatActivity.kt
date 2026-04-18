@@ -125,8 +125,9 @@ class ChatActivity : ComponentActivity() {
 
         val conn by MessagingConnectionState.state.collectAsState(initial = null)
         val scanning by ChatTransportCoordinator.scanning.collectAsState()
+        val serverReachable by ServerClient.serverReachable.collectAsState()
 
-        val statusText = remember(scanning, conn, peerAppId) {
+        val statusText = remember(scanning, conn, peerAppId, serverReachable) {
             when {
                 scanning -> "Connecting…"
                 else -> {
@@ -136,8 +137,11 @@ class ChatActivity : ComponentActivity() {
                     } else {
                         when (s!!.role) {
                             MessagingConnectionState.Role.WE_ARE_INTERNET ->
-                                if (NetworkUtils.hasInternet(this@ChatActivity)) "Connected via Wi‑Fi"
-                                else "Connected via relay (no Wi‑Fi)"
+                                when {
+                                    !NetworkUtils.hasInternet(this@ChatActivity) -> "Not connected"
+                                    !serverReachable -> "Not connected"
+                                    else -> "Connected via Wi‑Fi"
+                                }
                             MessagingConnectionState.Role.WE_ARE_CENTRAL,
                             MessagingConnectionState.Role.WE_ARE_PERIPHERAL ->
                                 if (s.peerAppId == null) "Connecting…" else "Connected via BLE"
