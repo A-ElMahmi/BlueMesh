@@ -4,7 +4,6 @@ An Android messaging app for communicating when the internet is down or delibera
 
 End-to-end encrypted. One-to-one. Works offline.
 
----
 
 ## Screenshots
 
@@ -14,7 +13,6 @@ End-to-end encrypted. One-to-one. Works offline.
   <img src="screenshots/device_discover_screen.jpg" alt="Device discovery" width="30%" />
 </p>
 
----
 
 ## Background
 
@@ -24,11 +22,10 @@ That raises the question this project tries to answer: **can people who still ha
 
 BLE-based mesh messaging apps exist (Briar, Bitchat, Bridgefy), but almost none bridge the offline mesh to the internet when one node happens to be online. BlueMesh closes that gap.
 
----
 
 ## Features
 
-- **Offline BLE mesh** — phones discover each other, connect, and forward messages up to ~5–7 hops.
+- **Offline BLE mesh** — phones discover each other, connect, and forward messages.
 - **Dynamic gateway** — any mesh node with internet automatically becomes a gateway; offline phones never need to reach the internet themselves.
 - **Automatic transport selection** — a direct send picks the best available path at the moment:
   1. Internet (if the server responds to a live health probe)
@@ -39,7 +36,6 @@ BLE-based mesh messaging apps exist (Briar, Bitchat, Bridgefy), but almost none 
 - **Stable peer identity** — 8-char hex ID independent of MAC address rotation.
 - **Jetpack Compose UI** — Material 3, chat list, per-peer chat screen, live connection status, device discovery.
 
----
 
 ## Architecture
 
@@ -55,7 +51,7 @@ BLE-based mesh messaging apps exist (Briar, Bitchat, Bridgefy), but almost none 
 | `ChatHistoryRepository`                | Room-backed encrypted chat history                                               |
 
 
----
+
 
 ## Server
 
@@ -67,7 +63,7 @@ The gateway needs a small backend to hold messages for offline recipients and to
 The app speaks to the server over 4 authenticated endpoints:
 `POST /message`, `GET /messages/{appId}`, `GET /relay-pending`, `POST /relay-confirm/{messageId}`. Every call carries an `X-API-Key` header.
 
----
+
 
 ## Build & Run
 
